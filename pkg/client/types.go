@@ -126,6 +126,7 @@ type GenerateTextRequest struct {
 	ReadingLevel int      `json:"readingLevel,omitempty"`
 	Length       int      `json:"length,omitempty"`
 	Model        string   `json:"model,omitempty"`
+	Streaming    *bool    `json:"streaming,omitempty"`
 }
 
 // GenerateTextResponse represents a text generation response

@@ -106,19 +106,19 @@ toneclone generate "Hello world"
 toneclone generate "Write a blog post about AI"
 
 # With persona
-toneclone generate "Draft a proposal" --persona="Professional"
+toneclone write "Draft a proposal" --persona="Professional"
 
 # With profile
-toneclone generate "Write an email" --profile="Email Template"
+toneclone write "Write an email" --profile="Email Template"
 
 # Interactive mode
-toneclone generate --interactive
+toneclone write --persona=casual
 
 # Streaming output
-toneclone generate "Long story" --stream
+toneclone write "Long story"
 
 # Save to file
-toneclone generate "Content" --output="result.txt"
+toneclone write "Content" --output="result.txt"
 ```
 
 ### Persona Management
@@ -131,7 +131,7 @@ toneclone personas list
 toneclone personas get persona-id
 
 # Create new persona
-toneclone personas create --name="Technical Writer" --description="Expert in technical documentation"
+toneclone personas create --name="Technical Writer"
 
 # Interactive creation
 toneclone personas create --interactive
@@ -302,36 +302,32 @@ toneclone health
 toneclone personas list
 
 # Generate content
-toneclone generate "Write a project status update" --persona="Professional" --profile="Email"
+toneclone write "Write a project status update" --persona="Professional" --profile="Email"
 
 # Save to file
-toneclone generate "Weekly report content" --output="report.md"
+toneclone write "Weekly report content" --output="report.md"
 ```
 
 ### Content Creation
 
 ```bash
 # Blog post
-toneclone generate "AI trends in 2024" --persona="Tech Writer" --profile="Blog Post"
+toneclone write "AI trends in 2024" --persona="Tech Writer" --profile="Blog Post"
 
 # Email campaigns
-toneclone generate "Newsletter content" --persona="Marketing" --profile="Email Campaign"
+toneclone write "Newsletter content" --persona="Marketing" --profile="Email Campaign"
 
 # Documentation
-toneclone generate "API documentation for users endpoint" --persona="Technical" --profile="Documentation"
+toneclone write "API documentation for users endpoint" --persona="Technical" --profile="Documentation"
 ```
 
 ### Persona Setup
 
 ```bash
 # Create specialized personas
-toneclone personas create \
-  --name="Social Media Manager" \
-  --description="Expert in social media content and engagement"
+toneclone personas create --name="Social Media Manager"
 
-toneclone personas create \
-  --name="Technical Writer" \
-  --description="Skilled in technical documentation and user guides"
+toneclone personas create --name="Technical Writer"
 
 # Create matching profiles
 toneclone profiles create \
@@ -368,9 +364,6 @@ toneclone personas list
 
 # JSON format
 toneclone personas list --format=json
-
-# Quiet/minimal output
-toneclone personas list --quiet
 ```
 
 ## Global Flags
@@ -427,7 +420,7 @@ toneclone config init
 
 ```bash
 # Enable debug output
-toneclone --debug generate "test"
+toneclone --debug write "test"
 
 # Verbose mode
 toneclone --verbose personas list
@@ -440,7 +433,7 @@ toneclone --verbose personas list
 toneclone --help
 
 # Command-specific help
-toneclone generate --help
+toneclone write --help
 toneclone personas create --help
 
 # List all commands
@@ -462,9 +455,9 @@ if ! toneclone auth current &>/dev/null; then
 fi
 
 # Generate multiple pieces
-toneclone generate "Blog post about AI" --output="blog-ai.md"
-toneclone generate "Social media post" --output="social-ai.txt"
-toneclone generate "Email newsletter" --output="newsletter.html"
+toneclone write "Blog post about AI" --output="blog-ai.md"
+toneclone write "Social media post" --output="social-ai.txt"
+toneclone write "Email newsletter" --output="newsletter.html"
 
 echo "Content generation complete!"
 ```
@@ -476,7 +469,7 @@ echo "Content generation complete!"
 export TONECLONE_API_KEY="$SECRET_API_KEY"
 
 # Generate content in pipeline
-toneclone generate "Release notes for v1.2.0" --output="release-notes.md"
+toneclone write "Release notes for v1.2.0" --output="release-notes.md"
 
 # Validate configuration
 toneclone config validate

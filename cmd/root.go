@@ -25,7 +25,7 @@ Generate text, manage personas, handle training data, and more - all from your t
 Perfect for automation, scripting, and integration with other tools.
 
 Examples:
-  toneclone generate text --persona=professional --prompt="Write a product description"
+  toneclone write --persona=professional --prompt="Write a product description"
   toneclone personas list
   toneclone training add --file=data.txt --persona=writer
 

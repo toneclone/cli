@@ -17,52 +17,37 @@ import (
 )
 
 var (
-	// Generate command flags
-	generatePersona   string
-	generateProfile   string
-	generatePrompt    string
-	generateFile      string
-	generateMaxTokens int
-	generateModel     string
-	generateOutput    string
-	generateVerbose   bool
-	generateTimeout   int
-	generateJson      bool
+	// Write command flags
+	writePersona  string
+	writeProfile  string
+	writePrompt   string
+	writeFile     string
+	writeOutput   string
+	writeVerbose  bool
+	writeTimeout  int
+	writeJson     bool
 )
 
-// generateCmd represents the generate command
-var generateCmd = &cobra.Command{
-	Use:   "generate",
+// writeCmd represents the write command
+var writeCmd = &cobra.Command{
+	Use:   "write",
 	Short: "Generate content using ToneClone AI",
-	Long: `Generate various types of content using ToneClone's AI capabilities.
-
-Use subcommands to specify the type of content to generate:
-- text: Generate text content using a persona and prompt
-
-Examples:
-  toneclone generate text --persona=professional --prompt="Write a product description"
-  toneclone generate text --file=prompt.txt --persona=creative
-  echo "Write a blog post" | toneclone generate text --persona=blogger`,
-}
-
-// textCmd represents the text subcommand
-var textCmd = &cobra.Command{
-	Use:   "text",
-	Short: "Generate text content",
 	Long: `Generate text content using ToneClone's AI with a specified persona and prompt.
 
-The prompt can be provided via:
+The prompt can be provided via (in order of priority):
 1. --prompt flag (direct text)
-2. --file flag (read from file)
+2. --file flag (read from file) 
 3. stdin (pipe or interactive input)
 
+If both --prompt and --file are provided, --prompt takes precedence.
+
 Examples:
-  toneclone generate text --persona=professional --prompt="Write a product description for a smartphone"
-  toneclone generate text --persona=creative --file=prompt.txt
-  toneclone generate text --persona=business --profile=email --prompt="Write a brief email"
-  toneclone generate text --persona=technical --profile="documentation,formal" --prompt="Write API docs"
-  echo "Write a brief email" | toneclone generate text --persona=business
-  toneclone generate text --persona=casual (will prompt for input)
+  toneclone write --persona=professional --prompt="Write a product description"
+  toneclone write --persona=creative --file=prompt.txt
+  toneclone write --persona=business --profile=email --prompt="Write a brief email"
+  toneclone write --persona=technical --profile="documentation,formal" --prompt="Write API docs"
+  echo "Write a brief email" | toneclone write --persona=business
+  toneclone write --persona=casual (will prompt for input)
 
 Profile Support:
   --profile "name"           Single profile by name or ID
@@ -73,30 +58,27 @@ Output Options:
   --output text     Plain text output (default)
   --output json     JSON output with metadata
   --verbose         Show generation metadata and statistics`,
-	RunE: runGenerateText,
+	RunE: runWrite,
 }
 
 func init() {
-	rootCmd.AddCommand(generateCmd)
-	generateCmd.AddCommand(textCmd)
+	rootCmd.AddCommand(writeCmd)
 
-	// Text generation flags
-	textCmd.Flags().StringVar(&generatePersona, "persona", "", "persona ID or name to use for generation")
-	textCmd.Flags().StringVar(&generateProfile, "profile", "", "profile ID or name (supports comma-separated multiple profiles)")
-	textCmd.Flags().StringVar(&generatePrompt, "prompt", "", "text prompt for generation")
-	textCmd.Flags().StringVar(&generateFile, "file", "", "file containing the prompt")
-	textCmd.Flags().IntVar(&generateMaxTokens, "max-tokens", 0, "maximum number of tokens to generate")
-	textCmd.Flags().StringVar(&generateModel, "model", "", "AI model to use for generation")
-	textCmd.Flags().StringVar(&generateOutput, "output", "text", "output format: text, json")
-	textCmd.Flags().BoolVar(&generateVerbose, "verbose", false, "show generation metadata and statistics")
-	textCmd.Flags().IntVar(&generateTimeout, "timeout", 30, "request timeout in seconds")
-	textCmd.Flags().BoolVar(&generateJson, "json", false, "output in JSON format (shorthand for --output json)")
+	// Write command flags
+	writeCmd.Flags().StringVar(&writePersona, "persona", "", "persona ID or name to use for generation")
+	writeCmd.Flags().StringVar(&writeProfile, "profile", "", "profile ID or name (supports comma-separated multiple profiles)")
+	writeCmd.Flags().StringVar(&writePrompt, "prompt", "", "text prompt for generation")
+	writeCmd.Flags().StringVar(&writeFile, "file", "", "file containing the prompt")
+	writeCmd.Flags().StringVar(&writeOutput, "output", "text", "output format: text, json")
+	writeCmd.Flags().BoolVar(&writeVerbose, "verbose", false, "show generation metadata and statistics")
+	writeCmd.Flags().IntVar(&writeTimeout, "timeout", 30, "request timeout in seconds")
+	writeCmd.Flags().BoolVar(&writeJson, "json", false, "output in JSON format (shorthand for --output json)")
 
 	// Make persona required
-	textCmd.MarkFlagRequired("persona")
+	writeCmd.MarkFlagRequired("persona")
 }
 
-func runGenerateText(cmd *cobra.Command, args []string) error {
+func runWrite(cmd *cobra.Command, args []string) error {
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -113,11 +95,11 @@ func runGenerateText(cmd *cobra.Command, args []string) error {
 	apiClient := client.NewToneCloneClientFromConfig(
 		keyConfig.BaseURL,
 		keyConfig.Key,
-		time.Duration(generateTimeout)*time.Second,
+		time.Duration(writeTimeout)*time.Second,
 	)
 
 	// Get the prompt
-	prompt, err := getPrompt()
+	prompt, err := getWritePrompt()
 	if err != nil {
 		return fmt.Errorf("failed to get prompt: %w", err)
 	}
@@ -127,7 +109,7 @@ func runGenerateText(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate persona exists
-	persona, err := validatePersona(cmd.Context(), apiClient, generatePersona)
+	persona, err := validatePersona(cmd.Context(), apiClient, writePersona)
 	if err != nil {
 		return fmt.Errorf("persona validation failed: %w", err)
 	}
@@ -135,9 +117,9 @@ func runGenerateText(cmd *cobra.Command, args []string) error {
 	// Validate profiles if specified
 	var profileID string
 	var validatedProfiles []*client.Profile
-	if generateProfile != "" {
+	if writeProfile != "" {
 		// Support comma-separated profiles
-		profileInputs := strings.Split(generateProfile, ",")
+		profileInputs := strings.Split(writeProfile, ",")
 		for i, profileInput := range profileInputs {
 			profileInputs[i] = strings.TrimSpace(profileInput)
 		}
@@ -173,11 +155,10 @@ func runGenerateText(cmd *cobra.Command, args []string) error {
 					Prompt:     prompt,
 					PersonaID:  persona.PersonaID,
 					ProfileIDs: profileIDs,
-					Model:      generateModel,
 				}
 				
 				// Show generation info if verbose
-				if generateVerbose {
+				if writeVerbose {
 					fmt.Fprintf(os.Stderr, "Generating text with persona: %s (%s)\n", persona.Name, persona.PersonaID)
 					fmt.Fprintf(os.Stderr, "Using profiles: %s\n", strings.Join(profileNames, ", "))
 				}
@@ -194,7 +175,7 @@ func runGenerateText(cmd *cobra.Command, args []string) error {
 					}
 					return fmt.Errorf("text generation failed: %w", err)
 				}
-				return outputText(response, persona)
+				return outputWriteText(response, persona)
 			}
 		}
 	}
@@ -204,24 +185,20 @@ func runGenerateText(cmd *cobra.Command, args []string) error {
 		Prompt:    prompt,
 		PersonaID: persona.PersonaID,
 		ProfileID: profileID,
-		Model:     generateModel,
 	}
 
 	// Show generation info if verbose
-	if generateVerbose {
+	if writeVerbose {
 		fmt.Fprintf(os.Stderr, "Generating text with persona: %s (%s)\n", persona.Name, persona.PersonaID)
 		if profileID != "" {
 			fmt.Fprintf(os.Stderr, "Using profile: %s\n", profileID)
-		}
-		if generateModel != "" {
-			fmt.Fprintf(os.Stderr, "Using model: %s\n", generateModel)
 		}
 		fmt.Fprintf(os.Stderr, "Prompt length: %d characters\n", len(prompt))
 		fmt.Fprintf(os.Stderr, "Generating...\n\n")
 	}
 
 	// Generate text
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(generateTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(writeTimeout)*time.Second)
 	defer cancel()
 
 	response, err := apiClient.Generate.Text(ctx, request)
@@ -237,27 +214,27 @@ func runGenerateText(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output based on format
-	if generateJson || generateOutput == "json" {
-		return outputJSON(response, persona)
+	if writeJson || writeOutput == "json" {
+		return outputWriteJSON(response, persona)
 	}
 
-	return outputText(response, persona)
+	return outputWriteText(response, persona)
 }
 
-func getPrompt() (string, error) {
+func getWritePrompt() (string, error) {
 	// Priority: --prompt flag > --file flag > stdin
-	if generatePrompt != "" {
-		return generatePrompt, nil
+	if writePrompt != "" {
+		return writePrompt, nil
 	}
 
-	if generateFile != "" {
-		return readPromptFromFile(generateFile)
+	if writeFile != "" {
+		return readWritePromptFromFile(writeFile)
 	}
 
-	return readPromptFromStdin()
+	return readWritePromptFromStdin()
 }
 
-func readPromptFromFile(filename string) (string, error) {
+func readWritePromptFromFile(filename string) (string, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %s: %w", filename, err)
@@ -265,7 +242,7 @@ func readPromptFromFile(filename string) (string, error) {
 	return string(data), nil
 }
 
-func readPromptFromStdin() (string, error) {
+func readWritePromptFromStdin() (string, error) {
 	// Check if stdin has data (piped input)
 	stat, err := os.Stdin.Stat()
 	if err != nil {
@@ -301,93 +278,8 @@ func readPromptFromStdin() (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-func validatePersona(ctx context.Context, apiClient *client.ToneCloneClient, personaInput string) (*client.Persona, error) {
-	// First try to get by ID
-	persona, err := apiClient.Personas.Get(ctx, personaInput)
-	if err == nil {
-		return persona, nil
-	}
 
-	// If that fails, try to find by name
-	personas, err := apiClient.Personas.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list personas: %w", err)
-	}
-
-	// Look for exact name match
-	for _, p := range personas {
-		if strings.EqualFold(p.Name, personaInput) {
-			return &p, nil
-		}
-	}
-
-	// Look for partial name match
-	var matches []client.Persona
-	for _, p := range personas {
-		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(personaInput)) {
-			matches = append(matches, p)
-		}
-	}
-
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("persona '%s' not found", personaInput)
-	}
-
-	if len(matches) > 1 {
-		var names []string
-		for _, p := range matches {
-			names = append(names, fmt.Sprintf("'%s' (%s)", p.Name, p.PersonaID))
-		}
-		return nil, fmt.Errorf("multiple personas match '%s': %s", personaInput, strings.Join(names, ", "))
-	}
-
-	return &matches[0], nil
-}
-
-func validateProfile(ctx context.Context, apiClient *client.ToneCloneClient, profileInput string) (*client.Profile, error) {
-	// First try to get by ID
-	profile, err := apiClient.Profiles.Get(ctx, profileInput)
-	if err == nil {
-		return profile, nil
-	}
-
-	// If that fails, try to find by name
-	profiles, err := apiClient.Profiles.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list profiles: %w", err)
-	}
-
-	// Look for exact name match
-	for _, p := range profiles {
-		if strings.EqualFold(p.Name, profileInput) {
-			return &p, nil
-		}
-	}
-
-	// Look for partial name match
-	var matches []client.Profile
-	for _, p := range profiles {
-		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(profileInput)) {
-			matches = append(matches, p)
-		}
-	}
-
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("profile '%s' not found", profileInput)
-	}
-
-	if len(matches) > 1 {
-		var names []string
-		for _, p := range matches {
-			names = append(names, fmt.Sprintf("'%s' (%s)", p.Name, p.ProfileID))
-		}
-		return nil, fmt.Errorf("multiple profiles match '%s': %s", profileInput, strings.Join(names, ", "))
-	}
-
-	return &matches[0], nil
-}
-
-func outputText(response *client.GenerateTextResponse, persona *client.Persona) error {
+func outputWriteText(response *client.GenerateTextResponse, persona *client.Persona) error {
 	// Just output the generated text
 	fmt.Print(response.Text)
 
@@ -397,7 +289,7 @@ func outputText(response *client.GenerateTextResponse, persona *client.Persona) 
 	}
 
 	// Show metadata if verbose
-	if generateVerbose {
+	if writeVerbose {
 		fmt.Fprintf(os.Stderr, "\n--- Generation Metadata ---\n")
 		fmt.Fprintf(os.Stderr, "Persona: %s (%s)\n", persona.Name, persona.PersonaID)
 		if response.Model != "" {
@@ -411,7 +303,7 @@ func outputText(response *client.GenerateTextResponse, persona *client.Persona) 
 	return nil
 }
 
-func outputJSON(response *client.GenerateTextResponse, persona *client.Persona) error {
+func outputWriteJSON(response *client.GenerateTextResponse, persona *client.Persona) error {
 	output := map[string]interface{}{
 		"text": response.Text,
 		"persona": map[string]string{

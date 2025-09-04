@@ -23,7 +23,6 @@ var (
 	personaFilter      string
 	personaInteractive bool
 	personaName        string
-	personaType        string
 	personaPresetID    string
 	personaForce       bool
 	personaConfirm     bool
@@ -43,7 +42,7 @@ Examples:
   toneclone personas list
   toneclone personas list --filter="professional"
   toneclone personas get persona-id
-  toneclone personas create --name="Blog Writer" --type="Level 1"
+  toneclone personas create --name="Blog Writer"
   toneclone personas update persona-id --name="New Name"
   toneclone personas delete persona-id`,
 }
@@ -84,16 +83,13 @@ Examples:
 var createPersonaCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new persona",
-	Long: `Create a new persona with the specified name and type.
+	Long: `Create a new persona with the specified name.
 
-Persona types determine the sophistication level:
-- Level 0: Basic persona (no training required)
-- Level 1: Standard persona (requires some training)
-- Level 2: Advanced persona (requires more training)
-- Level 3: Expert persona (requires extensive training)
+The persona type and other characteristics will be determined automatically
+by the system based on your usage and training data.
 
 Examples:
-  toneclone personas create --name="Professional Writer" --type="Level 1"
+  toneclone personas create --name="Professional Writer"
   toneclone personas create --name="Casual Blogger" --preset="blogger"
   toneclone personas create --interactive`,
 	RunE: runCreatePersona,
@@ -105,12 +101,11 @@ var updatePersonaCmd = &cobra.Command{
 	Short: "Update an existing persona",
 	Long: `Update the properties of an existing persona.
 
-You can update the name, type, and other properties of a persona.
-Some properties may require retraining the persona.
+You can update the name and other properties of a persona.
+Note: persona type is determined automatically by the system.
 
 Examples:
-  toneclone personas update persona-id --name="New Name"
-  toneclone personas update persona-id --type="Level 2"`,
+  toneclone personas update persona-id --name="New Name"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runUpdatePersona,
 }
@@ -151,14 +146,12 @@ func init() {
 
 	// Create command flags
 	createPersonaCmd.Flags().StringVar(&personaName, "name", "", "persona name")
-	createPersonaCmd.Flags().StringVar(&personaType, "type", "Level 0", "persona type (Level 0, Level 1, Level 2, Level 3)")
 	createPersonaCmd.Flags().StringVar(&personaPresetID, "preset", "", "preset ID to use for persona creation")
 	createPersonaCmd.Flags().BoolVar(&personaInteractive, "interactive", false, "interactive persona creation")
 	createPersonaCmd.Flags().StringVar(&personaFormat, "format", "table", "output format: table, json")
 
 	// Update command flags
 	updatePersonaCmd.Flags().StringVar(&personaName, "name", "", "new persona name")
-	updatePersonaCmd.Flags().StringVar(&personaType, "type", "", "new persona type")
 	updatePersonaCmd.Flags().StringVar(&personaFormat, "format", "table", "output format: table, json")
 
 	// Delete command flags
@@ -277,8 +270,7 @@ func runCreatePersona(cmd *cobra.Command, args []string) error {
 
 	// Create persona
 	persona := &client.Persona{
-		Name:        personaName,
-		PersonaType: personaType,
+		Name: personaName,
 	}
 
 	ctx := context.Background()
@@ -299,8 +291,8 @@ func runUpdatePersona(cmd *cobra.Command, args []string) error {
 	personaID := args[0]
 
 	// Check if any update flags are provided
-	if personaName == "" && personaType == "" {
-		return fmt.Errorf("at least one update flag must be provided (--name or --type)")
+	if personaName == "" {
+		return fmt.Errorf("at least one update flag must be provided (--name)")
 	}
 
 	// Load configuration
@@ -333,9 +325,6 @@ func runUpdatePersona(cmd *cobra.Command, args []string) error {
 	// Update fields
 	if personaName != "" {
 		existing.Name = personaName
-	}
-	if personaType != "" {
-		existing.PersonaType = personaType
 	}
 
 	// Update persona
@@ -415,34 +404,8 @@ func runInteractivePersonaCreation() error {
 		return fmt.Errorf("persona name is required")
 	}
 
-	// Get persona type
-	fmt.Println("\nSelect persona type:")
-	fmt.Println("  0. Level 0 - Basic persona (no training required)")
-	fmt.Println("  1. Level 1 - Standard persona (requires some training)")
-	fmt.Println("  2. Level 2 - Advanced persona (requires more training)")
-	fmt.Println("  3. Level 3 - Expert persona (requires extensive training)")
-	fmt.Print("Enter choice [0-3]: ")
-
-	var choice int
-	fmt.Scanln(&choice)
-
-	var selectedPersonaType string
-	switch choice {
-	case 0:
-		selectedPersonaType = "Level 0"
-	case 1:
-		selectedPersonaType = "Level 1"
-	case 2:
-		selectedPersonaType = "Level 2"
-	case 3:
-		selectedPersonaType = "Level 3"
-	default:
-		return fmt.Errorf("invalid choice")
-	}
-
 	// Set the values for the create function
 	personaName = name
-	personaType = selectedPersonaType
 
 	// Load configuration
 	cfg, err := config.LoadConfig()
@@ -465,8 +428,7 @@ func runInteractivePersonaCreation() error {
 
 	// Create persona
 	persona := &client.Persona{
-		Name:        personaName,
-		PersonaType: personaType,
+		Name: personaName,
 	}
 
 	ctx := context.Background()
