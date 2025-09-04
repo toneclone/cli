@@ -1,0 +1,121 @@
+# GoReleaser configuration for ToneClone CLI
+# Documentation: https://goreleaser.com
+
+version: 2
+
+# Build configuration
+builds:
+  - id: toneclone
+    binary: toneclone
+    main: ./main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Exclude combinations that don't make sense
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/toneclone/cli/cmd.Version={{.Version}}
+      - -X github.com/toneclone/cli/cmd.GitCommit={{.Commit}}
+      - -X github.com/toneclone/cli/cmd.BuildDate={{.Date}}
+      - -X github.com/toneclone/cli/cmd.GoVersion={{.Env.GOVERSION}}
+
+# Archive configuration
+archives:
+  - id: toneclone-archive
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+      - RELEASE-PLAN.md
+
+# Checksum configuration
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+# Snapshot configuration (for testing)
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+# Changelog configuration
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - "^build:"
+      - "Merge pull request"
+      - "Merge branch"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+# Release configuration
+release:
+  github:
+    owner: toneclone
+    name: cli
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## ToneClone CLI {{.Version}}
+
+    Thanks for using ToneClone CLI! This release includes the following changes:
+
+  footer: |
+    ## Installation
+
+    ### Go Install
+    ```bash
+    go install github.com/toneclone/cli@{{.Version}}
+    ```
+
+    ### Direct Download
+    Download the appropriate binary for your platform from the assets below.
+
+    ### Homebrew (coming soon)
+    ```bash
+    brew tap toneclone/toneclone
+    brew install toneclone
+    ```
+
+    **Full Changelog**: https://github.com/toneclone/cli/compare/{{.PreviousTag}}...{{.Tag}}
+
+# Validation
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+    - go test ./...
+
+# Metadata
+project_name: toneclone
