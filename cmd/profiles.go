@@ -41,11 +41,11 @@ to customize the writing style and format for specific use cases.
 Examples:
   toneclone profiles list
   toneclone profiles list --filter="email"
-  toneclone profiles get profile-id
+  toneclone profiles get "Email Template"
   toneclone profiles create --name="Email" --instructions="Write professional emails"
-  toneclone profiles update profile-id --name="New Name"
-  toneclone profiles delete profile-id
-  toneclone profiles associate --profile-id=123 --persona=Professional`,
+  toneclone profiles update "Email Template" --name="New Name"
+  toneclone profiles delete "Email Template"
+  toneclone profiles associate --profile="Email Template" --persona=Professional`,
 }
 
 // listProfilesCmd represents the list subcommand
@@ -67,15 +67,16 @@ Examples:
 
 // getProfileCmd represents the get subcommand
 var getProfileCmd = &cobra.Command{
-	Use:   "get <profile-id>",
+	Use:   "get <profile-name-or-id>",
 	Short: "Get detailed information about a profile",
-	Long: `Get detailed information about a specific profile.
+	Long: `Get detailed information about a specific profile by name or ID.
 
 Shows all metadata including instructions, creation date, and usage information.
 
 Examples:
+  toneclone profiles get "Email Template"
   toneclone profiles get profile-id
-  toneclone profiles get profile-id --format="json"`,
+  toneclone profiles get "Email Template" --format="json"`,
 	Args: cobra.ExactArgs(1),
 	RunE: runGetProfile,
 }
@@ -98,31 +99,32 @@ Examples:
 
 // updateProfileCmd represents the update subcommand
 var updateProfileCmd = &cobra.Command{
-	Use:   "update <profile-id>",
+	Use:   "update <profile-name-or-id>",
 	Short: "Update an existing profile",
-	Long: `Update the properties of an existing profile.
+	Long: `Update the properties of an existing profile by name or ID.
 
 You can update the name and instructions of a profile, or append text to existing instructions.
 
 Examples:
-  toneclone profiles update profile-id --name="New Name"
+  toneclone profiles update "Email Template" --name="New Name"
   toneclone profiles update profile-id --instructions="New instructions"
-  toneclone profiles update profile-id --append=" Also include examples."`,
+  toneclone profiles update "Email Template" --append=" Also include examples."`,
 	Args: cobra.ExactArgs(1),
 	RunE: runUpdateProfile,
 }
 
 // deleteProfileCmd represents the delete subcommand
 var deleteProfileCmd = &cobra.Command{
-	Use:   "delete <profile-id>",
+	Use:   "delete <profile-name-or-id>",
 	Short: "Delete a profile",
-	Long: `Delete a profile permanently.
+	Long: `Delete a profile permanently by name or ID.
 
 This action cannot be undone. The profile will be disassociated from all personas.
 
 Examples:
+  toneclone profiles delete "Email Template"
   toneclone profiles delete profile-id
-  toneclone profiles delete profile-id --confirm`,
+  toneclone profiles delete "Email Template" --confirm`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDeleteProfile,
 }
@@ -134,10 +136,11 @@ var associateProfileCmd = &cobra.Command{
 	Long: `Associate a profile with a persona for use in text generation.
 
 The profile will be available when generating text with the specified persona.
+Both profile and persona can be specified by name or ID.
 
 Examples:
-  toneclone profiles associate --profile-id=123 --persona=Professional
-  toneclone profiles associate --profile-id=123 --persona=persona-id`,
+  toneclone profiles associate --profile="Email Template" --persona=Professional
+  toneclone profiles associate --profile=profile-id --persona=persona-id`,
 	RunE: runAssociateProfile,
 }
 
@@ -148,10 +151,11 @@ var disassociateProfileCmd = &cobra.Command{
 	Long: `Disassociate a profile from a persona.
 
 The profile will no longer be available when generating text with the specified persona.
+Both profile and persona can be specified by name or ID.
 
 Examples:
-  toneclone profiles disassociate --profile-id=123 --persona=Professional
-  toneclone profiles disassociate --profile-id=123 --persona=persona-id`,
+  toneclone profiles disassociate --profile="Email Template" --persona=Professional
+  toneclone profiles disassociate --profile=profile-id --persona=persona-id`,
 	RunE: runDisassociateProfile,
 }
 
@@ -192,15 +196,15 @@ func init() {
 
 	// Associate command flags
 	associateProfileCmd.Flags().StringVar(&profilePersona, "persona", "", "persona name or ID")
-	associateProfileCmd.Flags().StringVar(&profileName, "profile-id", "", "profile ID to associate")
+	associateProfileCmd.Flags().StringVar(&profileName, "profile", "", "profile name or ID to associate")
 	associateProfileCmd.MarkFlagRequired("persona")
-	associateProfileCmd.MarkFlagRequired("profile-id")
+	associateProfileCmd.MarkFlagRequired("profile")
 
 	// Disassociate command flags
 	disassociateProfileCmd.Flags().StringVar(&profilePersona, "persona", "", "persona name or ID")
-	disassociateProfileCmd.Flags().StringVar(&profileName, "profile-id", "", "profile ID to disassociate")
+	disassociateProfileCmd.Flags().StringVar(&profileName, "profile", "", "profile name or ID to disassociate")
 	disassociateProfileCmd.MarkFlagRequired("persona")
-	disassociateProfileCmd.MarkFlagRequired("profile-id")
+	disassociateProfileCmd.MarkFlagRequired("profile")
 }
 
 func runListProfiles(cmd *cobra.Command, args []string) error {
@@ -247,7 +251,7 @@ func runListProfiles(cmd *cobra.Command, args []string) error {
 }
 
 func runGetProfile(cmd *cobra.Command, args []string) error {
-	profileID := args[0]
+	profileInput := args[0]
 
 	// Load configuration
 	cfg, err := config.LoadConfig()
@@ -268,11 +272,11 @@ func runGetProfile(cmd *cobra.Command, args []string) error {
 		30*time.Second,
 	)
 
-	// Get profile
+	// Validate and get profile by ID or name
 	ctx := context.Background()
-	profile, err := apiClient.Profiles.Get(ctx, profileID)
+	profile, err := validateProfile(ctx, apiClient, profileInput)
 	if err != nil {
-		return fmt.Errorf("failed to get profile: %w", err)
+		return fmt.Errorf("profile validation failed: %w", err)
 	}
 
 	// Output profile
@@ -336,7 +340,7 @@ func runCreateProfile(cmd *cobra.Command, args []string) error {
 }
 
 func runUpdateProfile(cmd *cobra.Command, args []string) error {
-	profileID := args[0]
+	profileInput := args[0]
 
 	// Check if any update flags are provided
 	if profileName == "" && profileInstructions == "" && profileAppend == "" {
@@ -369,10 +373,10 @@ func runUpdateProfile(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Get existing profile
-	existing, err := apiClient.Profiles.Get(ctx, profileID)
+	// Validate and get existing profile by ID or name
+	existing, err := validateProfile(ctx, apiClient, profileInput)
 	if err != nil {
-		return fmt.Errorf("failed to get profile: %w", err)
+		return fmt.Errorf("profile validation failed: %w", err)
 	}
 
 	// Update fields
@@ -387,7 +391,7 @@ func runUpdateProfile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update profile
-	updated, err := apiClient.Profiles.Update(ctx, profileID, existing)
+	updated, err := apiClient.Profiles.Update(ctx, existing.ProfileID, existing)
 	if err != nil {
 		return fmt.Errorf("failed to update profile: %w", err)
 	}
@@ -400,7 +404,7 @@ func runUpdateProfile(cmd *cobra.Command, args []string) error {
 }
 
 func runDeleteProfile(cmd *cobra.Command, args []string) error {
-	profileID := args[0]
+	profileInput := args[0]
 
 	// Load configuration
 	cfg, err := config.LoadConfig()
@@ -423,10 +427,10 @@ func runDeleteProfile(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Get profile info for confirmation
-	profile, err := apiClient.Profiles.Get(ctx, profileID)
+	// Validate and get profile by ID or name
+	profile, err := validateProfile(ctx, apiClient, profileInput)
 	if err != nil {
-		return fmt.Errorf("failed to get profile: %w", err)
+		return fmt.Errorf("profile validation failed: %w", err)
 	}
 
 	// Confirm deletion
@@ -441,7 +445,7 @@ func runDeleteProfile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Delete profile
-	err = apiClient.Profiles.Delete(ctx, profileID)
+	err = apiClient.Profiles.Delete(ctx, profile.ProfileID)
 	if err != nil {
 		return fmt.Errorf("failed to delete profile: %w", err)
 	}
@@ -478,8 +482,14 @@ func runAssociateProfile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("persona validation failed: %w", err)
 	}
 
+	// Validate profile
+	profile, err := validateProfile(ctx, apiClient, profileName)
+	if err != nil {
+		return fmt.Errorf("profile validation failed: %w", err)
+	}
+
 	// Associate profile
-	err = apiClient.Profiles.AssociateWithPersona(ctx, profileName, persona.PersonaID)
+	err = apiClient.Profiles.AssociateWithPersona(ctx, profile.ProfileID, persona.PersonaID)
 	if err != nil {
 		return fmt.Errorf("failed to associate profile: %w", err)
 	}
@@ -516,8 +526,14 @@ func runDisassociateProfile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("persona validation failed: %w", err)
 	}
 
+	// Validate profile
+	profile, err := validateProfile(ctx, apiClient, profileName)
+	if err != nil {
+		return fmt.Errorf("profile validation failed: %w", err)
+	}
+
 	// Disassociate profile
-	err = apiClient.Profiles.DisassociateFromPersona(ctx, profileName, persona.PersonaID)
+	err = apiClient.Profiles.DisassociateFromPersona(ctx, profile.ProfileID, persona.PersonaID)
 	if err != nil {
 		return fmt.Errorf("failed to disassociate profile: %w", err)
 	}
