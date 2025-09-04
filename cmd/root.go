@@ -34,7 +34,7 @@ Get started by configuring your API key:
 
 For more help on any command, use:
   toneclone [command] --help`,
-	Version: "0.1.0",
+	Version: Version,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
