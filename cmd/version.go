@@ -9,7 +9,7 @@ import (
 
 var (
 	// Version information - these will be set by build flags
-	Version   = "0.1.0"
+	Version   = "1.0.0"
 	GitCommit = "dev"
 	BuildDate = "unknown"
 	GoVersion = runtime.Version()
