@@ -223,9 +223,9 @@ func runGetPersona(cmd *cobra.Command, args []string) error {
 		30*time.Second,
 	)
 
-	// Get persona
+	// Get persona (supports both name and ID)
 	ctx := context.Background()
-	persona, err := apiClient.Personas.Get(ctx, personaID)
+	persona, err := validatePersona(ctx, apiClient, personaID)
 	if err != nil {
 		return fmt.Errorf("failed to get persona: %w", err)
 	}
@@ -317,7 +317,7 @@ func runUpdatePersona(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get existing persona
-	existing, err := apiClient.Personas.Get(ctx, personaID)
+	existing, err := validatePersona(ctx, apiClient, personaID)
 	if err != nil {
 		return fmt.Errorf("failed to get persona: %w", err)
 	}
@@ -366,7 +366,7 @@ func runDeletePersona(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Get persona info for confirmation
-	persona, err := apiClient.Personas.Get(ctx, personaID)
+	persona, err := validatePersona(ctx, apiClient, personaID)
 	if err != nil {
 		return fmt.Errorf("failed to get persona: %w", err)
 	}
