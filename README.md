@@ -183,10 +183,6 @@ toneclone training add --directory="./docs" --recursive --persona="Technical"
 # Associate file with persona
 toneclone training associate --file-id=123 --persona="Professional"
 
-# Monitor training jobs
-toneclone training jobs list
-toneclone training jobs status job-id --watch
-
 # Remove training file
 toneclone training remove --file-id=123 --confirm
 ```
@@ -345,10 +341,6 @@ toneclone profiles create \
 # Upload training materials
 toneclone training add --file="brand-guidelines.pdf" --persona="Marketing"
 toneclone training add --directory="./docs" --recursive --persona="Technical"
-
-# Monitor training progress
-toneclone training jobs list --status=running
-toneclone training jobs status job-123 --watch
 
 # Manage file associations
 toneclone training associate --file-id=456 --persona="Professional"

@@ -28,18 +28,15 @@ var (
 	trainingRecursive bool
 	trainingConfirm   bool
 	trainingVerbose   bool
-	trainingJobID     string
 	trainingFileID    string
-	trainingStatus    string
 	trainingBatchSize int
-	trainingWatch     bool
 )
 
 // trainingCmd represents the training command
 var trainingCmd = &cobra.Command{
 	Use:   "training",
 	Short: "Manage training data for personas",
-	Long: `Manage training data for personas - upload files, associate with personas, and monitor training jobs.
+	Long: `Manage training data for personas - upload files and associate with personas.
 
 Training data is used to customize personas with your own writing style and content.
 Files can be uploaded and associated with personas to improve their writing quality.
@@ -48,9 +45,7 @@ Examples:
   toneclone training list
   toneclone training add --file=document.txt --persona=professional
   toneclone training add --text="Sample content" --persona=casual
-  toneclone training associate --file-id=file-123 --persona=writer
-  toneclone training jobs list
-  toneclone training jobs status job-123`,
+  toneclone training associate --file-id=file-123 --persona=writer`,
 }
 
 // listTrainingCmd represents the list subcommand
@@ -126,65 +121,6 @@ Examples:
 	RunE: runDisassociateTraining,
 }
 
-// jobsCmd represents the jobs subcommand
-var jobsCmd = &cobra.Command{
-	Use:   "jobs",
-	Short: "Manage training jobs",
-	Long: `Manage training jobs - list, monitor status, and create new training jobs.
-
-Training jobs are automatically created when files are associated with personas.
-You can monitor their progress and create manual training jobs.
-
-Examples:
-  toneclone training jobs list
-  toneclone training jobs status job-123
-  toneclone training jobs create --persona=professional`,
-}
-
-// listJobsCmd represents the jobs list subcommand
-var listJobsCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List training jobs",
-	Long: `List all training jobs for the authenticated user.
-
-Jobs can be filtered by status and persona.
-
-Examples:
-  toneclone training jobs list
-  toneclone training jobs list --status=running
-  toneclone training jobs list --persona=professional`,
-	RunE: runListJobs,
-}
-
-// statusJobCmd represents the jobs status subcommand
-var statusJobCmd = &cobra.Command{
-	Use:   "status <job-id>",
-	Short: "Get training job status",
-	Long: `Get detailed status information for a specific training job.
-
-Shows progress, current status, and any error messages.
-
-Examples:
-  toneclone training jobs status job-123
-  toneclone training jobs status job-123 --watch`,
-	Args: cobra.ExactArgs(1),
-	RunE: runJobStatus,
-}
-
-// createJobCmd represents the jobs create subcommand
-var createJobCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create training job",
-	Long: `Create a new training job for a persona.
-
-Uses all files associated with the persona or specific files.
-
-Examples:
-  toneclone training jobs create --persona=professional
-  toneclone training jobs create --persona=writer --file-id=file-123,file-456`,
-	RunE: runCreateJob,
-}
-
 func init() {
 	rootCmd.AddCommand(trainingCmd)
 
@@ -194,12 +130,6 @@ func init() {
 	trainingCmd.AddCommand(removeTrainingCmd)
 	trainingCmd.AddCommand(associateTrainingCmd)
 	trainingCmd.AddCommand(disassociateTrainingCmd)
-	trainingCmd.AddCommand(jobsCmd)
-
-	// Add jobs subcommands
-	jobsCmd.AddCommand(listJobsCmd)
-	jobsCmd.AddCommand(statusJobCmd)
-	jobsCmd.AddCommand(createJobCmd)
 
 	// List command flags
 	listTrainingCmd.Flags().StringVar(&trainingFormat, "format", "table", "output format: table, json")
@@ -230,20 +160,6 @@ func init() {
 	disassociateTrainingCmd.Flags().StringVar(&trainingPersona, "persona", "", "persona to disassociate from")
 	disassociateTrainingCmd.MarkFlagRequired("file-id")
 	disassociateTrainingCmd.MarkFlagRequired("persona")
-
-	// Jobs list command flags
-	listJobsCmd.Flags().StringVar(&trainingFormat, "format", "table", "output format: table, json")
-	listJobsCmd.Flags().StringVar(&trainingStatus, "status", "", "filter by job status")
-	listJobsCmd.Flags().StringVar(&trainingPersona, "persona", "", "filter by persona name or ID")
-
-	// Jobs status command flags
-	statusJobCmd.Flags().BoolVar(&trainingWatch, "watch", false, "watch job status continuously")
-	statusJobCmd.Flags().StringVar(&trainingFormat, "format", "table", "output format: table, json")
-
-	// Jobs create command flags
-	createJobCmd.Flags().StringVar(&trainingPersona, "persona", "", "persona to train")
-	createJobCmd.Flags().StringVar(&trainingFileID, "file-id", "", "specific file ID(s) to train with (comma-separated)")
-	createJobCmd.MarkFlagRequired("persona")
 }
 
 func runListTraining(cmd *cobra.Command, args []string) error {
@@ -512,150 +428,6 @@ func runDisassociateTraining(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runListJobs(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Get current API key
-	keyConfig, err := cfg.GetCurrentKey()
-	if err != nil {
-		return fmt.Errorf("authentication required: %w", err)
-	}
-
-	// Create API client
-	apiClient := client.NewToneCloneClientFromConfig(
-		keyConfig.BaseURL,
-		keyConfig.Key,
-		30*time.Second,
-	)
-
-	ctx := context.Background()
-
-	// Get training jobs
-	jobs, err := apiClient.Training.ListJobs(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list training jobs: %w", err)
-	}
-
-	// Filter by status if specified
-	if trainingStatus != "" {
-		jobs = filterJobsByStatus(jobs, trainingStatus)
-	}
-
-	// Filter by persona if specified
-	if trainingPersona != "" {
-		persona, err := validatePersona(ctx, apiClient, trainingPersona)
-		if err != nil {
-			return fmt.Errorf("persona validation failed: %w", err)
-		}
-		jobs = filterJobsByPersona(jobs, persona.PersonaID)
-	}
-
-	// Output jobs
-	if trainingFormat == "json" {
-		return outputTrainingJobsJSON(jobs)
-	}
-
-	return outputTrainingJobsTable(jobs)
-}
-
-func runJobStatus(cmd *cobra.Command, args []string) error {
-	jobID := args[0]
-
-	// Load configuration
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Get current API key
-	keyConfig, err := cfg.GetCurrentKey()
-	if err != nil {
-		return fmt.Errorf("authentication required: %w", err)
-	}
-
-	// Create API client
-	apiClient := client.NewToneCloneClientFromConfig(
-		keyConfig.BaseURL,
-		keyConfig.Key,
-		30*time.Second,
-	)
-
-	ctx := context.Background()
-
-	if trainingWatch {
-		return watchJobStatus(ctx, apiClient, jobID)
-	}
-
-	// Get job status
-	job, err := apiClient.Training.GetJob(ctx, jobID)
-	if err != nil {
-		return fmt.Errorf("failed to get job status: %w", err)
-	}
-
-	// Output job status
-	if trainingFormat == "json" {
-		return outputJobStatusJSON(job)
-	}
-
-	return outputJobStatusDetails(job)
-}
-
-func runCreateJob(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Get current API key
-	keyConfig, err := cfg.GetCurrentKey()
-	if err != nil {
-		return fmt.Errorf("authentication required: %w", err)
-	}
-
-	// Create API client
-	apiClient := client.NewToneCloneClientFromConfig(
-		keyConfig.BaseURL,
-		keyConfig.Key,
-		30*time.Second,
-	)
-
-	ctx := context.Background()
-
-	// Validate persona
-	persona, err := validatePersona(ctx, apiClient, trainingPersona)
-	if err != nil {
-		return fmt.Errorf("persona validation failed: %w", err)
-	}
-
-	// Create job request
-	var fileIDs []string
-	if trainingFileID != "" {
-		fileIDs = strings.Split(trainingFileID, ",")
-		for i, id := range fileIDs {
-			fileIDs[i] = strings.TrimSpace(id)
-		}
-	}
-
-	job, err := apiClient.Training.CreateJob(ctx, persona.PersonaID, fileIDs)
-	if err != nil {
-		return fmt.Errorf("failed to create training job: %w", err)
-	}
-
-	fmt.Printf("✓ Training job created successfully\n")
-	fmt.Printf("  Job ID: %s\n", job.JobID)
-	fmt.Printf("  Persona: %s\n", persona.Name)
-	fmt.Printf("  Status: %s\n", job.Status)
-	if len(fileIDs) > 0 {
-		fmt.Printf("  Files: %d\n", len(fileIDs))
-	}
-
-	return nil
-}
 
 // Helper functions
 
