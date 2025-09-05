@@ -2,7 +2,7 @@ module github.com/toneclone/cli
 
 go 1.23.0
 
-toolchain go1.23.11
+toolchain go1.24.7
 
 require (
 	github.com/spf13/cobra v1.9.1
