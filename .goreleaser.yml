@@ -121,7 +121,7 @@ brews:
       name: homebrew-toneclone
       branch: main
       token: "{{ .Env.HOMEBREW_TOKEN }}"
-    folder: Formula
+    directory: Formula
     test: |
       system "#{bin}/toneclone --version"
     install: |
