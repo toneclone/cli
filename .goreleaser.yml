@@ -102,13 +102,30 @@ release:
     ### Direct Download
     Download the appropriate binary for your platform from the assets below.
 
-    ### Homebrew (coming soon)
+    ### Homebrew
     ```bash
     brew tap toneclone/toneclone
     brew install toneclone
     ```
 
     **Full Changelog**: https://github.com/toneclone/cli/compare/{{.PreviousTag}}...{{.Tag}}
+
+# Homebrew tap configuration
+brews:
+  - name: toneclone
+    homepage: https://github.com/toneclone/cli
+    description: "AI-powered writing assistance from the command line"
+    license: MIT
+    repository:
+      owner: toneclone
+      name: homebrew-toneclone
+      branch: main
+      token: "{{ .Env.HOMEBREW_TOKEN }}"
+    folder: Formula
+    test: |
+      system "#{bin}/toneclone --version"
+    install: |
+      bin.install "toneclone"
 
 # Validation
 before:
