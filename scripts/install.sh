@@ -275,6 +275,7 @@ main() {
 }
 
 # Check if script is being sourced or executed
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+# When piped to bash, BASH_SOURCE[0] is empty and $0 is "bash"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]] || [[ -z "${BASH_SOURCE[0]}" && "${0}" == "bash" ]]; then
     main "$@"
 fi
