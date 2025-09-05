@@ -32,8 +32,11 @@ builds:
 archives:
   - id: toneclone-archive
     name_template: >-
-      {{ .ProjectName }}_{{ .Version }}_
-      {{- .Os | lower }}_
+      {{ .ProjectName }}_
+      {{- if eq .Os "Darwin" }}darwin
+      {{- else if eq .Os "Linux" }}linux  
+      {{- else if eq .Os "Windows" }}windows
+      {{- else }}{{ .Os }}{{ end }}_
       {{- .Arch }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     files:
