@@ -39,36 +39,24 @@ success() {
 detect_platform() {
     local os arch
 
-    # Detect OS
+    # Detect OS (use lowercase to match GoReleaser output)
     case "$(uname -s)" in
-        Darwin*) os="Darwin" ;;
-        Linux*)  os="Linux" ;;
-        CYGWIN*|MINGW*|MSYS*) os="Windows" ;;
+        Darwin*) os="darwin" ;;
+        Linux*)  os="linux" ;;
+        CYGWIN*|MINGW*|MSYS*) os="windows" ;;
         *) error "Unsupported operating system: $(uname -s)" ;;
     esac
 
-    # Detect architecture
+    # Detect architecture (use consistent naming)
     case "$(uname -m)" in
-        x86_64|amd64) arch="x86_64" ;;
+        x86_64|amd64) arch="amd64" ;;
         arm64|aarch64) arch="arm64" ;;
-        armv7l) arch="armv7" ;;
+        armv7l) arch="arm64" ;;
         *) error "Unsupported architecture: $(uname -m)" ;;
     esac
 
-    # Handle special cases
-    if [[ "$os" == "Darwin" && "$arch" == "arm64" ]]; then
-        arch="ARM64"
-    elif [[ "$os" == "Darwin" && "$arch" == "x86_64" ]]; then
-        arch="x86_64"
-    elif [[ "$os" == "Linux" && "$arch" == "arm64" ]]; then
-        arch="ARM64"
-    fi
-
     # Set archive extension
     local ext="tar.gz"
-    if [[ "$os" == "Windows" ]]; then
-        ext="zip"
-    fi
 
     echo "${os}_${arch}.${ext}"
 }
@@ -144,7 +132,7 @@ install_binary() {
     tmp_dir=$(mktemp -d)
     trap "rm -rf '$tmp_dir'" EXIT
 
-    local archive_name="${BINARY_NAME}_${version#v}_${platform}"
+    local archive_name="${BINARY_NAME}_${platform}"
     local download_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${archive_name}"
 
     log "Downloading $BINARY_NAME $version for $platform..."
