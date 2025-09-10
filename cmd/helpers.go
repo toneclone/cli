@@ -33,6 +33,13 @@ func validatePersona(ctx context.Context, apiClient *client.ToneCloneClient, per
 	}
 	allPersonas := append(userPersonas, builtInPersonas...)
 
+	// Look for exact ID match first
+	for _, p := range allPersonas {
+		if p.PersonaID == personaInput {
+			return &p, nil
+		}
+	}
+
 	// Look for exact name match
 	for _, p := range allPersonas {
 		if strings.EqualFold(p.Name, personaInput) {

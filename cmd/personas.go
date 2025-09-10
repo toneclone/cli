@@ -194,7 +194,7 @@ func runListPersonas(cmd *cobra.Command, args []string) error {
 	for i := range builtInPersonas {
 		builtInPersonas[i].IsBuiltIn = true
 	}
-	
+
 	// Combine personas with user personas first
 	personas := append(userPersonas, builtInPersonas...)
 
