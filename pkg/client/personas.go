@@ -25,6 +25,16 @@ func (p *PersonasClient) List(ctx context.Context) ([]Persona, error) {
 	return personas, nil
 }
 
+// ListBuiltIn retrieves all built-in personas
+func (p *PersonasClient) ListBuiltIn(ctx context.Context) ([]Persona, error) {
+	var personas []Persona
+	err := p.client.Get(ctx, "/personas/builtin", &personas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list built-in personas: %w", err)
+	}
+	return personas, nil
+}
+
 // Get retrieves a specific persona by ID
 func (p *PersonasClient) Get(ctx context.Context, personaID string) (*Persona, error) {
 	var persona Persona

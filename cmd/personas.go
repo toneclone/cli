@@ -178,12 +178,25 @@ func runListPersonas(cmd *cobra.Command, args []string) error {
 		30*time.Second,
 	)
 
-	// Get personas
+	// Get personas (both user and built-in)
 	ctx := context.Background()
-	personas, err := apiClient.Personas.List(ctx)
+	userPersonas, err := apiClient.Personas.List(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list personas: %w", err)
+		return fmt.Errorf("failed to list user personas: %w", err)
 	}
+
+	builtInPersonas, err := apiClient.Personas.ListBuiltIn(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list built-in personas: %w", err)
+	}
+
+	// Mark built-in personas and combine lists
+	for i := range builtInPersonas {
+		builtInPersonas[i].IsBuiltIn = true
+	}
+	
+	// Combine personas with user personas first
+	personas := append(userPersonas, builtInPersonas...)
 
 	// Filter personas
 	if personaFilter != "" {
@@ -502,18 +515,23 @@ func outputPersonasTable(personas []client.Persona) error {
 	defer w.Flush()
 
 	// Header
-	fmt.Fprintln(w, "NAME\tTYPE\tSTATUS\tTRAINING\tLAST USED\tID")
-	fmt.Fprintln(w, "----\t----\t------\t--------\t---------\t--")
+	fmt.Fprintln(w, "NAME\tTYPE\tSTATUS\tTRAINING\tLAST USED\tSOURCE\tID")
+	fmt.Fprintln(w, "----\t----\t------\t--------\t---------\t------\t--")
 
 	// Rows
 	for _, persona := range personas {
 		lastUsed := formatTime(persona.LastUsedAt)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		source := "User"
+		if persona.IsBuiltIn {
+			source = "Built-in"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			persona.Name,
 			persona.PersonaType,
 			persona.Status,
 			persona.TrainingStatus,
 			lastUsed,
+			source,
 			persona.PersonaID,
 		)
 	}
@@ -539,6 +557,11 @@ func outputPersonaDetails(persona *client.Persona) error {
 	fmt.Printf("Status:           %s\n", persona.Status)
 	fmt.Printf("Training Status:  %s\n", persona.TrainingStatus)
 	fmt.Printf("Voice Evolution:  %t\n", persona.VoiceEvolution)
+	source := "User"
+	if persona.IsBuiltIn {
+		source = "Built-in"
+	}
+	fmt.Printf("Source:           %s\n", source)
 	fmt.Printf("Last Used:        %s\n", formatTime(persona.LastUsedAt))
 	fmt.Printf("Last Modified:    %s\n", formatTime(persona.LastModifiedAt))
 

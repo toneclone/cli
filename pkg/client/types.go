@@ -43,6 +43,7 @@ type Persona struct {
 	PersonaType       string    `json:"personaType"`
 	VoiceEvolution    bool      `json:"voiceEvolution"`
 	PromptDescription string    `json:"personaPromptDescription,omitempty"`
+	IsBuiltIn         bool      `json:"isBuiltIn,omitempty"`
 }
 
 // PersonaListResponse represents the response from listing personas

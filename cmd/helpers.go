@@ -10,20 +10,31 @@ import (
 
 // validatePersona validates a persona by ID or name and returns the persona object
 func validatePersona(ctx context.Context, apiClient *client.ToneCloneClient, personaInput string) (*client.Persona, error) {
-	// First try to get by ID
+	// First try to get by ID (this will work for both user and built-in personas)
 	persona, err := apiClient.Personas.Get(ctx, personaInput)
 	if err == nil {
 		return persona, nil
 	}
 
-	// If that fails, try to find by name
-	personas, err := apiClient.Personas.List(ctx)
+	// If that fails, try to find by name in both user and built-in personas
+	userPersonas, err := apiClient.Personas.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list personas: %w", err)
+		return nil, fmt.Errorf("failed to list user personas: %w", err)
 	}
 
+	builtInPersonas, err := apiClient.Personas.ListBuiltIn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list built-in personas: %w", err)
+	}
+
+	// Mark built-in personas and combine lists
+	for i := range builtInPersonas {
+		builtInPersonas[i].IsBuiltIn = true
+	}
+	allPersonas := append(userPersonas, builtInPersonas...)
+
 	// Look for exact name match
-	for _, p := range personas {
+	for _, p := range allPersonas {
 		if strings.EqualFold(p.Name, personaInput) {
 			return &p, nil
 		}
@@ -31,7 +42,7 @@ func validatePersona(ctx context.Context, apiClient *client.ToneCloneClient, per
 
 	// Look for partial name match
 	var matches []client.Persona
-	for _, p := range personas {
+	for _, p := range allPersonas {
 		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(personaInput)) {
 			matches = append(matches, p)
 		}
@@ -44,7 +55,11 @@ func validatePersona(ctx context.Context, apiClient *client.ToneCloneClient, per
 	if len(matches) > 1 {
 		var names []string
 		for _, p := range matches {
-			names = append(names, fmt.Sprintf("'%s' (%s)", p.Name, p.PersonaID))
+			source := "user"
+			if p.IsBuiltIn {
+				source = "built-in"
+			}
+			names = append(names, fmt.Sprintf("'%s' (%s, %s)", p.Name, p.PersonaID, source))
 		}
 		return nil, fmt.Errorf("multiple personas match '%s': %s", personaInput, strings.Join(names, ", "))
 	}
