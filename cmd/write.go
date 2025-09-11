@@ -18,14 +18,14 @@ import (
 
 var (
 	// Write command flags
-	writePersona  string
-	writeProfile  string
-	writePrompt   string
-	writeFile     string
-	writeOutput   string
-	writeVerbose  bool
-	writeTimeout  int
-	writeJson     bool
+	writePersona   string
+	writeKnowledge string
+	writePrompt    string
+	writeFile      string
+	writeOutput    string
+	writeVerbose   bool
+	writeTimeout   int
+	writeJson      bool
 )
 
 // writeCmd represents the write command
@@ -44,15 +44,15 @@ If both --prompt and --file are provided, --prompt takes precedence.
 Examples:
   toneclone write --persona=professional --prompt="Write a product description"
   toneclone write --persona=creative --file=prompt.txt
-  toneclone write --persona=business --profile=email --prompt="Write a brief email"
-  toneclone write --persona=technical --profile="documentation,formal" --prompt="Write API docs"
+  toneclone write --persona=business --knowledge=email --prompt="Write a brief email"
+  toneclone write --persona=technical --knowledge="documentation,formal" --prompt="Write API docs"
   echo "Write a brief email" | toneclone write --persona=business
   toneclone write --persona=casual (will prompt for input)
 
-Profile Support:
-  --profile "name"           Single profile by name or ID
-  --profile "name1,name2"    Multiple profiles (comma-separated)
-  --profile "123,456"        Multiple profiles by ID
+Knowledge Card Support:
+  --knowledge "name"           Single knowledge card by name or ID
+  --knowledge "name1,name2"    Multiple knowledge cards (comma-separated)
+  --knowledge "123,456"        Multiple knowledge cards by ID
 
 Output Options:
   --output text     Plain text output (default)
@@ -66,7 +66,7 @@ func init() {
 
 	// Write command flags
 	writeCmd.Flags().StringVar(&writePersona, "persona", "", "persona ID or name to use for generation")
-	writeCmd.Flags().StringVar(&writeProfile, "profile", "", "profile ID or name (supports comma-separated multiple profiles)")
+	writeCmd.Flags().StringVar(&writeKnowledge, "knowledge", "", "knowledge card ID or name (supports comma-separated multiple cards)")
 	writeCmd.Flags().StringVar(&writePrompt, "prompt", "", "text prompt for generation")
 	writeCmd.Flags().StringVar(&writeFile, "file", "", "file containing the prompt")
 	writeCmd.Flags().StringVar(&writeOutput, "output", "text", "output format: text, json")
@@ -114,56 +114,56 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("persona validation failed: %w", err)
 	}
 
-	// Validate profiles if specified
-	var profileID string
-	var validatedProfiles []*client.Profile
-	if writeProfile != "" {
-		// Support comma-separated profiles
-		profileInputs := strings.Split(writeProfile, ",")
-		for i, profileInput := range profileInputs {
-			profileInputs[i] = strings.TrimSpace(profileInput)
+	// Validate knowledge cards if specified
+	var knowledgeCardID string
+	var validatedKnowledgeCards []*client.KnowledgeCard
+	if writeKnowledge != "" {
+		// Support comma-separated knowledge cards
+		knowledgeInputs := strings.Split(writeKnowledge, ",")
+		for i, knowledgeInput := range knowledgeInputs {
+			knowledgeInputs[i] = strings.TrimSpace(knowledgeInput)
 		}
 
-		// Validate each profile
-		for _, profileInput := range profileInputs {
-			if profileInput == "" {
+		// Validate each knowledge card
+		for _, knowledgeInput := range knowledgeInputs {
+			if knowledgeInput == "" {
 				continue
 			}
-			profile, err := validateProfile(cmd.Context(), apiClient, profileInput)
+			card, err := validateKnowledgeCard(cmd.Context(), apiClient, knowledgeInput)
 			if err != nil {
-				return fmt.Errorf("profile validation failed for '%s': %w", profileInput, err)
+				return fmt.Errorf("knowledge card validation failed for '%s': %w", knowledgeInput, err)
 			}
-			validatedProfiles = append(validatedProfiles, profile)
+			validatedKnowledgeCards = append(validatedKnowledgeCards, card)
 		}
 
-		// Set up profile information
-		if len(validatedProfiles) > 0 {
-			if len(validatedProfiles) == 1 {
-				// Single profile - use legacy field for backward compatibility
-				profileID = validatedProfiles[0].ProfileID
+		// Set up knowledge information
+		if len(validatedKnowledgeCards) > 0 {
+			if len(validatedKnowledgeCards) == 1 {
+				// Single knowledge card - use legacy field for backward compatibility
+				knowledgeCardID = validatedKnowledgeCards[0].KnowledgeCardID
 			} else {
-				// Multiple profiles - use new array field
-				var profileIDs []string
-				var profileNames []string
-				for _, profile := range validatedProfiles {
-					profileIDs = append(profileIDs, profile.ProfileID)
-					profileNames = append(profileNames, profile.Name)
+				// Multiple knowledge cards - use new array field
+				var knowledgeCardIDs []string
+				var knowledgeNames []string
+				for _, card := range validatedKnowledgeCards {
+					knowledgeCardIDs = append(knowledgeCardIDs, card.KnowledgeCardID)
+					knowledgeNames = append(knowledgeNames, card.Name)
 				}
-				
-				// Create generation request with multiple profiles
+
+				// Create generation request with multiple knowledge cards
 				request := &client.GenerateTextRequest{
-					Prompt:     prompt,
-					PersonaID:  persona.PersonaID,
-					ProfileIDs: profileIDs,
+					Prompt:           prompt,
+					PersonaID:        persona.PersonaID,
+					KnowledgeCardIDs: knowledgeCardIDs,
 				}
-				
+
 				// Show generation info if verbose
 				if writeVerbose {
 					fmt.Fprintf(os.Stderr, "Generating text with persona: %s (%s)\n", persona.Name, persona.PersonaID)
-					fmt.Fprintf(os.Stderr, "Using profiles: %s\n", strings.Join(profileNames, ", "))
+					fmt.Fprintf(os.Stderr, "Using knowledge cards: %s\n", strings.Join(knowledgeNames, ", "))
 				}
-				
-				// Generate and return early for multiple profiles
+
+				// Generate and return early for multiple knowledge cards
 				response, err := apiClient.Generate.Text(cmd.Context(), request)
 				if err != nil {
 					// Check for rate limit error and provide helpful message
@@ -180,18 +180,18 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create generation request (single or no profile)
+	// Create generation request (single or no knowledge card)
 	request := &client.GenerateTextRequest{
-		Prompt:    prompt,
-		PersonaID: persona.PersonaID,
-		ProfileID: profileID,
+		Prompt:          prompt,
+		PersonaID:       persona.PersonaID,
+		KnowledgeCardID: knowledgeCardID,
 	}
 
 	// Show generation info if verbose
 	if writeVerbose {
 		fmt.Fprintf(os.Stderr, "Generating text with persona: %s (%s)\n", persona.Name, persona.PersonaID)
-		if profileID != "" {
-			fmt.Fprintf(os.Stderr, "Using profile: %s\n", profileID)
+		if knowledgeCardID != "" {
+			fmt.Fprintf(os.Stderr, "Using knowledge card: %s\n", knowledgeCardID)
 		}
 		fmt.Fprintf(os.Stderr, "Prompt length: %d characters\n", len(prompt))
 		fmt.Fprintf(os.Stderr, "Generating...\n\n")
@@ -278,7 +278,6 @@ func readWritePromptFromStdin() (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-
 func outputWriteText(response *client.GenerateTextResponse, persona *client.Persona) error {
 	// Just output the generated text
 	fmt.Print(response.Text)
@@ -318,8 +317,8 @@ func outputWriteJSON(response *client.GenerateTextResponse, persona *client.Pers
 	if response.Tokens > 0 {
 		output["tokens"] = response.Tokens
 	}
-	if response.ProfileID != "" {
-		output["profile_id"] = response.ProfileID
+	if response.KnowledgeCardID != "" {
+		output["knowledge_card_id"] = response.KnowledgeCardID
 	}
 
 	encoder := json.NewEncoder(os.Stdout)

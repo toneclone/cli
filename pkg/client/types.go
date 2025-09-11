@@ -7,20 +7,20 @@ type APIKeyScope string
 
 const (
 	// Read permissions
-	ScopePersonasRead APIKeyScope = "personas:read"
-	ScopeProfilesRead APIKeyScope = "profiles:read"
-	ScopeTrainingRead APIKeyScope = "training:read"
-	ScopeFilesRead    APIKeyScope = "files:read"
-	ScopeWritingRead  APIKeyScope = "writing:read"
-	ScopeUserRead     APIKeyScope = "user:read"
+	ScopePersonasRead  APIKeyScope = "personas:read"
+	ScopeKnowledgeRead APIKeyScope = "knowledge:read"
+	ScopeTrainingRead  APIKeyScope = "training:read"
+	ScopeFilesRead     APIKeyScope = "files:read"
+	ScopeWritingRead   APIKeyScope = "writing:read"
+	ScopeUserRead      APIKeyScope = "user:read"
 
 	// Write permissions
-	ScopePersonasWrite APIKeyScope = "personas:write"
-	ScopeProfilesWrite APIKeyScope = "profiles:write"
-	ScopeTrainingWrite APIKeyScope = "training:write"
-	ScopeFilesWrite    APIKeyScope = "files:write"
-	ScopeWritingWrite  APIKeyScope = "writing:write"
-	ScopeUserWrite     APIKeyScope = "user:write"
+	ScopePersonasWrite  APIKeyScope = "personas:write"
+	ScopeKnowledgeWrite APIKeyScope = "knowledge:write"
+	ScopeTrainingWrite  APIKeyScope = "training:write"
+	ScopeFilesWrite     APIKeyScope = "files:write"
+	ScopeWritingWrite   APIKeyScope = "writing:write"
+	ScopeUserWrite      APIKeyScope = "user:write"
 
 	// Text generation
 	ScopeTextGenerate APIKeyScope = "text:generate"
@@ -51,21 +51,21 @@ type PersonaListResponse struct {
 	Personas []Persona `json:"personas"`
 }
 
-// Profile represents a writing profile
-type Profile struct {
-	PK           string    `json:"PK"`
-	SK           string    `json:"SK"`
-	ProfileID    string    `json:"profileId"`
-	UserID       string    `json:"userId"`
-	Name         string    `json:"name"`
-	Instructions string    `json:"instructions"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+// KnowledgeCard represents a writing knowledge card
+type KnowledgeCard struct {
+	PK              string    `json:"PK"`
+	SK              string    `json:"SK"`
+	KnowledgeCardID string    `json:"knowledgeCardId"`
+	UserID          string    `json:"userId"`
+	Name            string    `json:"name"`
+	Instructions    string    `json:"instructions"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
-// ProfileListResponse represents the response from listing profiles
-type ProfileListResponse struct {
-	Profiles []Profile `json:"profiles"`
+// KnowledgeCardListResponse represents the response from listing knowledge cards
+type KnowledgeCardListResponse struct {
+	KnowledgeCards []KnowledgeCard `json:"knowledgeCards"`
 }
 
 // TrainingFile represents a training file
@@ -115,40 +115,40 @@ type TrainingFileListResponse struct {
 
 // GenerateTextRequest represents a text generation request
 type GenerateTextRequest struct {
-	Prompt       string   `json:"prompt"`
-	PersonaID    string   `json:"personaId"`
-	ProfileID    string   `json:"profileId,omitempty"`
-	ProfileIDs   []string `json:"profileIds,omitempty"`
-	Context      string   `json:"context,omitempty"`
-	SessionID    string   `json:"sessionId,omitempty"`
-	Document     string   `json:"document,omitempty"`
-	Selection    string   `json:"selection,omitempty"`
-	Formality    int      `json:"formality,omitempty"`
-	ReadingLevel int      `json:"readingLevel,omitempty"`
-	Length       int      `json:"length,omitempty"`
-	Model        string   `json:"model,omitempty"`
-	Streaming    *bool    `json:"streaming,omitempty"`
+	Prompt           string   `json:"prompt"`
+	PersonaID        string   `json:"personaId"`
+	KnowledgeCardID  string   `json:"knowledgeCardId,omitempty"`
+	KnowledgeCardIDs []string `json:"knowledgeCardIds,omitempty"`
+	Context          string   `json:"context,omitempty"`
+	SessionID        string   `json:"sessionId,omitempty"`
+	Document         string   `json:"document,omitempty"`
+	Selection        string   `json:"selection,omitempty"`
+	Formality        int      `json:"formality,omitempty"`
+	ReadingLevel     int      `json:"readingLevel,omitempty"`
+	Length           int      `json:"length,omitempty"`
+	Model            string   `json:"model,omitempty"`
+	Streaming        *bool    `json:"streaming,omitempty"`
 }
 
 // GenerateTextResponse represents a text generation response
 type GenerateTextResponse struct {
-	Text      string `json:"text"`
-	PersonaID string `json:"personaId,omitempty"`
-	ProfileID string `json:"profileId,omitempty"`
-	Model     string `json:"model,omitempty"`
-	Tokens    int    `json:"tokens,omitempty"`
+	Text            string `json:"text"`
+	PersonaID       string `json:"personaId,omitempty"`
+	KnowledgeCardID string `json:"knowledgeCardId,omitempty"`
+	Model           string `json:"model,omitempty"`
+	Tokens          int    `json:"tokens,omitempty"`
 }
 
 // WritingSession represents a writing session
 type WritingSession struct {
-	SessionID      string    `json:"sessionId"`
-	Title          string    `json:"title,omitempty"`
-	Content        string    `json:"content,omitempty"`
-	PersonaID      string    `json:"personaId,omitempty"`
-	ProfileID      string    `json:"profileId,omitempty"`
-	CreatedAt      time.Time `json:"createdAt"`
-	LastModifiedAt time.Time `json:"lastModifiedAt"`
-	Status         string    `json:"status"`
+	SessionID       string    `json:"sessionId"`
+	Title           string    `json:"title,omitempty"`
+	Content         string    `json:"content,omitempty"`
+	PersonaID       string    `json:"personaId,omitempty"`
+	KnowledgeCardID string    `json:"knowledgeCardId,omitempty"`
+	CreatedAt       time.Time `json:"createdAt"`
+	LastModifiedAt  time.Time `json:"lastModifiedAt"`
+	Status          string    `json:"status"`
 }
 
 // WritingSessionListResponse represents the response from listing writing sessions

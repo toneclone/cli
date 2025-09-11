@@ -218,9 +218,9 @@ func performHealthChecks(comprehensive bool) error {
 		})
 		result.Checks = append(result.Checks, check4)
 
-		// Check 5: Profiles Service
-		check5 := performCheck("Profiles Service", func() error {
-			_, err := apiClient.Profiles.List(ctx)
+		// Check 5: Knowledge Service
+		check5 := performCheck("Knowledge Service", func() error {
+			_, err := apiClient.Knowledge.List(ctx)
 			return err
 		})
 		result.Checks = append(result.Checks, check5)
