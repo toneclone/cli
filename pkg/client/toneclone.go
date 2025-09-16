@@ -11,10 +11,10 @@ type ToneCloneClient struct {
 	*Client
 
 	// Resource clients
-	Personas *PersonasClient
-	Generate *GenerateClient
-	Training *TrainingClient
-	Profiles *ProfilesClient
+	Personas  *PersonasClient
+	Generate  *GenerateClient
+	Training  *TrainingClient
+	Knowledge *KnowledgeClient
 }
 
 // NewToneCloneClient creates a new ToneClone API client with all resource clients
@@ -22,11 +22,11 @@ func NewToneCloneClient(apiKey string, options ...ClientOption) *ToneCloneClient
 	baseClient := NewClient(apiKey, options...)
 
 	return &ToneCloneClient{
-		Client:   baseClient,
-		Personas: NewPersonasClient(baseClient),
-		Generate: NewGenerateClient(baseClient),
-		Training: NewTrainingClient(baseClient),
-		Profiles: NewProfilesClient(baseClient),
+		Client:    baseClient,
+		Personas:  NewPersonasClient(baseClient),
+		Generate:  NewGenerateClient(baseClient),
+		Training:  NewTrainingClient(baseClient),
+		Knowledge: NewKnowledgeClient(baseClient),
 	}
 }
 

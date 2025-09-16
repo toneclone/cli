@@ -1,6 +1,6 @@
 # ToneClone CLI
 
-A powerful command-line interface for ToneClone, the AI-powered writing assistance platform. Generate text, manage personas, configure profiles, and streamline your writing workflow from the terminal.
+A powerful command-line interface for ToneClone, the AI-powered writing assistance platform. Generate text, manage personas and knowledge cards, configure profiles, and streamline your writing workflow from the terminal.
 
 ## Table of Contents
 
@@ -108,8 +108,8 @@ toneclone write --persona="Professional" --prompt="Write a blog post about AI"
 # With persona
 toneclone write --persona="Professional" --prompt="Draft a proposal"
 
-# With profile
-toneclone write --persona="Professional" --profile="Email Template" --prompt="Write an email"
+# With knowledge card
+toneclone write --persona="Professional" --knowledge="Email Template" --prompt="Write an email"
 
 # Interactive mode (will prompt for input)
 toneclone write --persona="Casual"
@@ -143,29 +143,29 @@ toneclone personas update "Technical Writer" --name="New Name"
 toneclone personas delete "Technical Writer" --confirm
 ```
 
-### Profile Management
+### Knowledge Management
 
 ```bash
-# List profiles
-toneclone profiles list
+# List knowledge cards
+toneclone knowledge list
 
-# Get profile details
-toneclone profiles get "Email Template"
+# Get knowledge card details
+toneclone knowledge get "Email Template"
 
-# Create profile
-toneclone profiles create --name="Email Template" --instructions="Write professional emails"
+# Create knowledge card
+toneclone knowledge create --name="Email Template" --instructions="Write professional emails"
 
-# Update profile
-toneclone profiles update "Email Template" --name="New Name"
+# Update knowledge card
+toneclone knowledge update "Email Template" --name="New Name"
 
 # Append to instructions
-toneclone profiles update "Email Template" --append=" Include examples."
+toneclone knowledge update "Email Template" --append=" Include examples."
 
 # Associate with persona
-toneclone profiles associate --profile="Email Template" --persona="Professional"
+toneclone knowledge associate --knowledge="Email Template" --persona="Professional"
 
-# Delete profile
-toneclone profiles delete "Email Template" --confirm
+# Delete knowledge card
+toneclone knowledge delete "Email Template" --confirm
 ```
 
 ### Training Data Management
@@ -301,7 +301,7 @@ toneclone health
 toneclone personas list
 
 # Generate content
-toneclone write --persona="Professional" --profile="Email" --prompt="Write a project status update"
+toneclone write --persona="Professional" --knowledge="Email" --prompt="Write a project status update"
 
 # Save to file
 toneclone write --persona="Professional" --prompt="Weekly report content" > report.md
@@ -311,13 +311,13 @@ toneclone write --persona="Professional" --prompt="Weekly report content" > repo
 
 ```bash
 # Blog post
-toneclone write --persona="Tech Writer" --profile="Blog Post" --prompt="AI trends in 2024"
+toneclone write --persona="Tech Writer" --knowledge="Blog Post" --prompt="AI trends in 2024"
 
 # Email campaigns
-toneclone write --persona="Marketing" --profile="Email Campaign" --prompt="Newsletter content"
+toneclone write --persona="Marketing" --knowledge="Email Campaign" --prompt="Newsletter content"
 
 # Documentation
-toneclone write --persona="Technical" --profile="Documentation" --prompt="API documentation for users endpoint"
+toneclone write --persona="Technical" --knowledge="Documentation" --prompt="API documentation for users endpoint"
 ```
 
 ### Persona Setup
@@ -328,12 +328,12 @@ toneclone personas create --name="Social Media Manager"
 
 toneclone personas create --name="Technical Writer"
 
-# Create matching profiles
-toneclone profiles create \
+# Create matching knowledge cards
+toneclone knowledge create \
   --name="Twitter Post" \
   --instructions="Write engaging Twitter posts under 280 characters"
 
-toneclone profiles create \
+toneclone knowledge create \
   --name="Documentation" \
   --instructions="Write clear, concise technical documentation with examples"
 ```
@@ -470,17 +470,17 @@ toneclone write --persona="Technical" --prompt="Release notes for v1.2.0" > rele
 toneclone config validate
 ```
 
-### Profile Management
+### Knowledge Management
 
 ```bash
-# Create profiles for different use cases
-toneclone profiles create --name="Email" --instructions="Professional email format"
-toneclone profiles create --name="Blog" --instructions="Engaging blog post style"
-toneclone profiles create --name="Documentation" --instructions="Clear technical writing"
+# Create knowledge cards for different use cases
+toneclone knowledge create --name="Email" --instructions="Professional email format"
+toneclone knowledge create --name="Blog" --instructions="Engaging blog post style"
+toneclone knowledge create --name="Documentation" --instructions="Clear technical writing"
 
-# Associate profiles with personas
-toneclone profiles associate --profile="Email" --persona="Professional"
-toneclone profiles associate --profile="Blog Post" --persona="Creative"
+# Associate knowledge cards with personas
+toneclone knowledge associate --knowledge="Email" --persona="Professional"
+toneclone knowledge associate --knowledge="Blog Post" --persona="Creative"
 ```
 
 ## Support

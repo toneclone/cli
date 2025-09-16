@@ -74,45 +74,45 @@ func validatePersona(ctx context.Context, apiClient *client.ToneCloneClient, per
 	return &matches[0], nil
 }
 
-// validateProfile validates a profile by ID or name and returns the profile object
-func validateProfile(ctx context.Context, apiClient *client.ToneCloneClient, profileInput string) (*client.Profile, error) {
+// validateKnowledgeCard validates a knowledge card by ID or name and returns the card object
+func validateKnowledgeCard(ctx context.Context, apiClient *client.ToneCloneClient, knowledgeInput string) (*client.KnowledgeCard, error) {
 	// First try to get by ID
-	profile, err := apiClient.Profiles.Get(ctx, profileInput)
+	card, err := apiClient.Knowledge.Get(ctx, knowledgeInput)
 	if err == nil {
-		return profile, nil
+		return card, nil
 	}
 
 	// If that fails, try to find by name
-	profiles, err := apiClient.Profiles.List(ctx)
+	cards, err := apiClient.Knowledge.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list profiles: %w", err)
+		return nil, fmt.Errorf("failed to list knowledge cards: %w", err)
 	}
 
 	// Look for exact name match
-	for _, p := range profiles {
-		if strings.EqualFold(p.Name, profileInput) {
-			return &p, nil
+	for _, c := range cards {
+		if strings.EqualFold(c.Name, knowledgeInput) {
+			return &c, nil
 		}
 	}
 
 	// Look for partial name match
-	var matches []client.Profile
-	for _, p := range profiles {
-		if strings.Contains(strings.ToLower(p.Name), strings.ToLower(profileInput)) {
-			matches = append(matches, p)
+	var matches []client.KnowledgeCard
+	for _, c := range cards {
+		if strings.Contains(strings.ToLower(c.Name), strings.ToLower(knowledgeInput)) {
+			matches = append(matches, c)
 		}
 	}
 
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("profile '%s' not found", profileInput)
+		return nil, fmt.Errorf("knowledge card '%s' not found", knowledgeInput)
 	}
 
 	if len(matches) > 1 {
 		var names []string
-		for _, p := range matches {
-			names = append(names, fmt.Sprintf("'%s' (%s)", p.Name, p.ProfileID))
+		for _, c := range matches {
+			names = append(names, fmt.Sprintf("'%s' (%s)", c.Name, c.KnowledgeCardID))
 		}
-		return nil, fmt.Errorf("multiple profiles match '%s': %s", profileInput, strings.Join(names, ", "))
+		return nil, fmt.Errorf("multiple knowledge cards match '%s': %s", knowledgeInput, strings.Join(names, ", "))
 	}
 
 	return &matches[0], nil

@@ -20,22 +20,22 @@ func (g *GenerateClient) Text(ctx context.Context, request *GenerateTextRequest)
 	// Set streaming to false to get JSON response instead of SSE
 	streaming := false
 	request.Streaming = &streaming
-	
+
 	// Use the standard client Post method for JSON response
 	var response struct {
 		Content string `json:"content"`
 		Done    bool   `json:"done"`
 	}
-	
+
 	if err := g.client.Post(ctx, "/query", request, &response); err != nil {
 		return nil, fmt.Errorf("failed to generate text: %w", err)
 	}
 
 	return &GenerateTextResponse{
-		Text:      response.Content,
-		PersonaID: request.PersonaID,
-		ProfileID: request.ProfileID,
-		Model:     request.Model,
+		Text:            response.Content,
+		PersonaID:       request.PersonaID,
+		KnowledgeCardID: request.KnowledgeCardID,
+		Model:           request.Model,
 	}, nil
 }
 
