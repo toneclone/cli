@@ -116,6 +116,8 @@ func runWrite(cmd *cobra.Command, args []string) error {
 
 	// Validate knowledge cards if specified
 	var knowledgeCardID string
+	var knowledgeCardIDs []string
+	var knowledgeCardNames []string
 	var validatedKnowledgeCards []*client.KnowledgeCard
 	if writeKnowledge != "" {
 		// Support comma-separated knowledge cards
@@ -138,60 +140,43 @@ func runWrite(cmd *cobra.Command, args []string) error {
 
 		// Set up knowledge information
 		if len(validatedKnowledgeCards) > 0 {
+			for _, card := range validatedKnowledgeCards {
+				knowledgeCardNames = append(knowledgeCardNames, card.Name)
+			}
+
 			if len(validatedKnowledgeCards) == 1 {
 				// Single knowledge card - use legacy field for backward compatibility
 				knowledgeCardID = validatedKnowledgeCards[0].KnowledgeCardID
 			} else {
 				// Multiple knowledge cards - use new array field
-				var knowledgeCardIDs []string
-				var knowledgeNames []string
+				knowledgeCardIDs = make([]string, 0, len(validatedKnowledgeCards))
 				for _, card := range validatedKnowledgeCards {
 					knowledgeCardIDs = append(knowledgeCardIDs, card.KnowledgeCardID)
-					knowledgeNames = append(knowledgeNames, card.Name)
 				}
-
-				// Create generation request with multiple knowledge cards
-				request := &client.GenerateTextRequest{
-					Prompt:           prompt,
-					PersonaID:        persona.PersonaID,
-					KnowledgeCardIDs: knowledgeCardIDs,
-				}
-
-				// Show generation info if verbose
-				if writeVerbose {
-					fmt.Fprintf(os.Stderr, "Generating text with persona: %s (%s)\n", persona.Name, persona.PersonaID)
-					fmt.Fprintf(os.Stderr, "Using knowledge cards: %s\n", strings.Join(knowledgeNames, ", "))
-				}
-
-				// Generate and return early for multiple knowledge cards
-				response, err := apiClient.Generate.Text(cmd.Context(), request)
-				if err != nil {
-					// Check for rate limit error and provide helpful message
-					if rateLimitErr, ok := err.(*client.RateLimitError); ok {
-						if rateLimitErr.RetryAfterSeconds > 0 {
-							return fmt.Errorf("Rate limit exceeded. Please try again in %d seconds", rateLimitErr.RetryAfterSeconds)
-						}
-						return fmt.Errorf("Rate limit exceeded. Please wait before making another request")
-					}
-					return fmt.Errorf("text generation failed: %w", err)
-				}
-				return outputWriteText(response, persona)
 			}
 		}
 	}
 
 	// Create generation request (single or no knowledge card)
 	request := &client.GenerateTextRequest{
-		Prompt:          prompt,
-		PersonaID:       persona.PersonaID,
-		KnowledgeCardID: knowledgeCardID,
+		Prompt:           prompt,
+		PersonaID:        persona.PersonaID,
+		KnowledgeCardID:  knowledgeCardID,
+		KnowledgeCardIDs: knowledgeCardIDs,
 	}
 
 	// Show generation info if verbose
 	if writeVerbose {
 		fmt.Fprintf(os.Stderr, "Generating text with persona: %s (%s)\n", persona.Name, persona.PersonaID)
-		if knowledgeCardID != "" {
-			fmt.Fprintf(os.Stderr, "Using knowledge card: %s\n", knowledgeCardID)
+		switch {
+		case len(knowledgeCardIDs) > 0:
+			fmt.Fprintf(os.Stderr, "Using knowledge cards: %s\n", strings.Join(knowledgeCardNames, ", "))
+		case knowledgeCardID != "":
+			if len(knowledgeCardNames) > 0 && knowledgeCardNames[0] != "" {
+				fmt.Fprintf(os.Stderr, "Using knowledge card: %s (%s)\n", knowledgeCardNames[0], knowledgeCardID)
+			} else {
+				fmt.Fprintf(os.Stderr, "Using knowledge card: %s\n", knowledgeCardID)
+			}
 		}
 		fmt.Fprintf(os.Stderr, "Prompt length: %d characters\n", len(prompt))
 		fmt.Fprintf(os.Stderr, "Generating...\n\n")
