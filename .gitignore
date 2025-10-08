@@ -57,6 +57,8 @@ coverage.html
 .env
 .env.local
 .env.*.local
+.envrc
+.tmuxp.yaml
 
 # Release archives
 releases/
