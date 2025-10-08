@@ -62,3 +62,6 @@ coverage.html
 releases/
 *.tar.gz
 *.zip
+
+# Screenshots
+screenshots/*.gif

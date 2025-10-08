@@ -2,6 +2,8 @@
 
 A powerful command-line interface for ToneClone, the AI-powered writing assistance platform. Generate text, manage personas and knowledge cards, configure profiles, and streamline your writing workflow from the terminal.
 
+![ToneClone CLI Demo](screenshots/demo.gif)
+
 ## Table of Contents
 
 - [Installation](#installation)
