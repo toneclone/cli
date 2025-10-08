@@ -7,15 +7,19 @@ set -e
 
 echo "🚀 Setting up ToneClone CLI demo account..."
 
-# API key for demo account
-TONECLONE_DEMO_API_KEY
+# API key for demo account (set via environment variable or provide your own)
+if [ -z "$TONECLONE_DEMO_API_KEY" ]; then
+    echo "Error: Please set TONECLONE_DEMO_API_KEY environment variable"
+    echo "Usage: TONECLONE_DEMO_API_KEY='your-key' ./setup-demo.sh"
+    exit 1
+fi
 
 # Path to writing samples
 SAMPLES_DIR="$HOME/projects/writing-samples/jon/emails"
 
 echo ""
 echo "📝 Step 1: Authenticating with demo account..."
-echo "$DEMO_API_KEY" | toneclone auth login --name="demo" --from-stdin --force
+echo "$TONECLONE_DEMO_API_KEY" | toneclone auth login --name="demo" --from-stdin --force
 
 echo ""
 echo "👤 Step 2: Creating personas..."
