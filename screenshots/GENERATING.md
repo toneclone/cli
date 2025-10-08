@@ -53,7 +53,7 @@ vhs demo.tape
 
 ## Demo Account Details
 
-- **API Key**: `YOUR_API_KEY`
+- **API Key**: Use your own ToneClone API key or create a dedicated demo account
 - **Profile Name**: `demo`
 
 ### Personas Created
