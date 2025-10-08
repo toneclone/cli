@@ -1,0 +1,48 @@
+diff --git a/api/handlers/users.go b/api/handlers/users.go
+new file mode 100644
+index 0000000..b5e6f8a
+--- /dev/null
++++ b/api/handlers/users.go
+@@ -0,0 +1,45 @@
++package handlers
++
++import (
++	"encoding/json"
++	"net/http"
++
++	"github.com/myapp/models"
++	"github.com/myapp/database"
++)
++
++// GetUserProfile returns the authenticated user's profile information
++func GetUserProfile(w http.ResponseWriter, r *http.Request) {
++	userID := r.Context().Value("userID").(string)
++
++	user, err := database.GetUserByID(userID)
++	if err != nil {
++		http.Error(w, "User not found", http.StatusNotFound)
++		return
++	}
++
++	profile := models.UserProfile{
++		ID:        user.ID,
++		Email:     user.Email,
++		Name:      user.Name,
++		CreatedAt: user.CreatedAt,
++	}
++
++	w.Header().Set("Content-Type", "application/json")
++	json.NewEncoder(w).Encode(profile)
++}
+diff --git a/api/routes.go b/api/routes.go
+index 3f2a1e5..8c9d4f2 100644
+--- a/api/routes.go
++++ b/api/routes.go
+@@ -12,6 +12,7 @@ func SetupRoutes(r *mux.Router) {
+ 	// Auth routes
+ 	r.HandleFunc("/api/auth/login", handlers.Login).Methods("POST")
+ 	r.HandleFunc("/api/auth/register", handlers.Register).Methods("POST")
++	r.HandleFunc("/api/users/profile", middleware.Auth(handlers.GetUserProfile)).Methods("GET")
+
+ 	// Protected routes
+ 	protected := r.PathPrefix("/api").Subrouter()
