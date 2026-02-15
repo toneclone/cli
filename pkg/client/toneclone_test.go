@@ -23,6 +23,10 @@ func TestNewToneCloneClient(t *testing.T) {
 	if client.Generate == nil {
 		t.Error("Expected Generate client to be initialized")
 	}
+
+	if client.StyleGuard == nil {
+		t.Error("Expected StyleGuard client to be initialized")
+	}
 }
 
 func TestNewToneCloneClientFromConfig(t *testing.T) {

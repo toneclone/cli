@@ -243,12 +243,19 @@ func runGetPersona(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get persona: %w", err)
 	}
 
+	// Fetch style guard rule count for display
+	styleGuardCount := -1
+	words, err := apiClient.StyleGuard.ListForPersona(ctx, persona.PersonaID)
+	if err == nil {
+		styleGuardCount = len(words)
+	}
+
 	// Output persona
 	if personaFormat == "json" {
 		return outputPersonaJSON(persona)
 	}
 
-	return outputPersonaDetails(persona)
+	return outputPersonaDetails(persona, styleGuardCount)
 }
 
 func runCreatePersona(cmd *cobra.Command, args []string) error {
@@ -548,7 +555,7 @@ func outputPersonasJSON(personas []client.Persona) error {
 	})
 }
 
-func outputPersonaDetails(persona *client.Persona) error {
+func outputPersonaDetails(persona *client.Persona, styleGuardCount int) error {
 	fmt.Printf("Persona Details\n")
 	fmt.Printf("===============\n")
 	fmt.Printf("Name:             %s\n", persona.Name)
@@ -567,6 +574,22 @@ func outputPersonaDetails(persona *client.Persona) error {
 
 	if persona.PromptDescription != "" {
 		fmt.Printf("Description:      %s\n", persona.PromptDescription)
+	}
+
+	// Imperfection settings
+	if persona.Imperfections != nil {
+		fmt.Printf("\nImperfections\n")
+		fmt.Printf("-------------\n")
+		fmt.Printf("Enabled:          %t\n", persona.Imperfections.Enabled)
+		fmt.Printf("Intensity:        %s\n", rateToIntensity(persona.Imperfections.Rate))
+		fmt.Printf("Rate:             %g (%g%%)\n", persona.Imperfections.Rate, persona.Imperfections.Rate*100)
+	}
+
+	// Style guard rule count
+	if styleGuardCount >= 0 {
+		fmt.Printf("\nStyle Guard\n")
+		fmt.Printf("-----------\n")
+		fmt.Printf("Rules:            %d\n", styleGuardCount)
 	}
 
 	return nil

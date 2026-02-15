@@ -4,9 +4,44 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/toneclone/cli/internal/config"
 	"github.com/toneclone/cli/pkg/client"
 )
+
+// newAPIClient creates a new ToneClone API client from the current configuration
+func newAPIClient() (*client.ToneCloneClient, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	keyConfig, err := cfg.GetCurrentKey()
+	if err != nil {
+		return nil, fmt.Errorf("authentication required: %w", err)
+	}
+
+	return client.NewToneCloneClientFromConfig(
+		keyConfig.BaseURL,
+		keyConfig.Key,
+		30*time.Second,
+	), nil
+}
+
+// rateToIntensity converts a typo rate to an intensity label
+func rateToIntensity(rate float64) string {
+	switch {
+	case rate <= 0:
+		return "none"
+	case rate <= 0.005:
+		return "subtle"
+	case rate <= 0.01:
+		return "noticeable"
+	default:
+		return "high"
+	}
+}
 
 // validatePersona validates a persona by ID or name and returns the persona object
 func validatePersona(ctx context.Context, apiClient *client.ToneCloneClient, personaInput string) (*client.Persona, error) {
