@@ -136,15 +136,24 @@ func TestQueryParamsPreserved(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[]`))
+		w.Write([]byte(`{"version":"2.0.0","type":"comprehensive","items":[{"word":"delve into","replacement":"explore","mode":"CUSTOM","category":"phrase"}]}`))
 	}))
 	defer server.Close()
 
 	client := NewToneCloneClient("test_key", WithBaseURL(server.URL))
 
-	_, err := client.StyleGuard.BundlePreview(context.Background(), "comprehensive")
+	resp, err := client.StyleGuard.BundlePreview(context.Background(), "comprehensive")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp.Version != "2.0.0" {
+		t.Errorf("Expected version 2.0.0, got %s", resp.Version)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("Expected 1 item, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Word != "delve into" {
+		t.Errorf("Expected word 'delve into', got %s", resp.Items[0].Word)
 	}
 }
 

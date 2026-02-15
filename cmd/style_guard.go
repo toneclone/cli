@@ -385,7 +385,7 @@ func runBundlePreview(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := context.Background()
-	items, err := apiClient.StyleGuard.BundlePreview(ctx, sgBundleType)
+	response, err := apiClient.StyleGuard.BundlePreview(ctx, sgBundleType)
 	if err != nil {
 		return err
 	}
@@ -393,24 +393,22 @@ func runBundlePreview(cmd *cobra.Command, args []string) error {
 	if sgFormat == "json" {
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(map[string]interface{}{
-			"bundleType": sgBundleType,
-			"items":      items,
-			"count":      len(items),
-		})
+		return encoder.Encode(response)
 	}
 
-	if len(items) == 0 {
+	if len(response.Items) == 0 {
 		fmt.Println("No items in bundle.")
 		return nil
 	}
+
+	fmt.Printf("Bundle: %s (v%s)\n\n", response.Type, response.Version)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	defer w.Flush()
 
 	fmt.Fprintf(w, "WORD\tMODE\tREPLACEMENT\tCATEGORY\n")
 	fmt.Fprintf(w, "----\t----\t-----------\t--------\n")
-	for _, item := range items {
+	for _, item := range response.Items {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 			item.Word,
 			item.Mode,
@@ -453,9 +451,10 @@ func runBundleStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Bundle Status\n")
 	fmt.Printf("=============\n")
 	fmt.Printf("Applied:        %t\n", status.Applied)
-	fmt.Printf("Bundle Type:    %s\n", status.BundleType)
-	fmt.Printf("Bundle Version: %s\n", status.BundleVersion)
-	fmt.Printf("Word Count:     %d\n", status.WordCount)
+	fmt.Printf("Bundle Type:    %s\n", status.Type)
+	fmt.Printf("Bundle Version: %s\n", status.Version)
+	fmt.Printf("Total Words:    %d\n", status.WordsCount)
+	fmt.Printf("Active Words:   %d\n", status.ActiveCount)
 
 	return nil
 }

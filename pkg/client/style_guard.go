@@ -41,16 +41,24 @@ type ApplyBundleRequest struct {
 type BundlePreviewItem struct {
 	Word              string `json:"word"`
 	Mode              string `json:"mode"`
-	CustomReplacement string `json:"customReplacement,omitempty"`
+	CustomReplacement string `json:"replacement,omitempty"`
 	Category          string `json:"category,omitempty"`
+}
+
+// BundlePreviewResponse represents the API response for bundle preview
+type BundlePreviewResponse struct {
+	Version string              `json:"version"`
+	Type    string              `json:"type"`
+	Items   []BundlePreviewItem `json:"items"`
 }
 
 // BundleStatusResponse represents the status of a bundle application
 type BundleStatusResponse struct {
-	Applied       bool   `json:"applied"`
-	BundleType    string `json:"bundleType,omitempty"`
-	BundleVersion string `json:"bundleVersion,omitempty"`
-	WordCount     int    `json:"wordCount"`
+	Applied     bool   `json:"applied"`
+	Version     string `json:"version,omitempty"`
+	Type        string `json:"type,omitempty"`
+	WordsCount  int    `json:"wordsCount"`
+	ActiveCount int    `json:"activeCount"`
 }
 
 // List retrieves all global style guard rules
@@ -103,17 +111,17 @@ func (s *StyleGuardClient) Delete(ctx context.Context, styleGuardID string) erro
 }
 
 // BundlePreview previews items in a style guard bundle
-func (s *StyleGuardClient) BundlePreview(ctx context.Context, bundleType string) ([]BundlePreviewItem, error) {
-	var items []BundlePreviewItem
+func (s *StyleGuardClient) BundlePreview(ctx context.Context, bundleType string) (*BundlePreviewResponse, error) {
+	var response BundlePreviewResponse
 	path := "/style-guard/bundle/preview"
 	if bundleType != "" {
 		path = fmt.Sprintf("%s?bundleType=%s", path, url.QueryEscape(bundleType))
 	}
-	err := s.client.Get(ctx, path, &items)
+	err := s.client.Get(ctx, path, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to preview bundle: %w", err)
 	}
-	return items, nil
+	return &response, nil
 }
 
 // BundleStatus retrieves the bundle application status
