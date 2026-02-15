@@ -126,6 +126,28 @@ func TestValidateConnectionFailure(t *testing.T) {
 	}
 }
 
+func TestQueryParamsPreserved(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/style-guard/bundle/preview" {
+			t.Errorf("Expected path /style-guard/bundle/preview, got %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("bundleType") != "comprehensive" {
+			t.Errorf("Expected query param bundleType=comprehensive, got %s", r.URL.Query().Get("bundleType"))
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+
+	client := NewToneCloneClient("test_key", WithBaseURL(server.URL))
+
+	_, err := client.StyleGuard.BundlePreview(context.Background(), "comprehensive")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
 func TestPing(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/ping" {
