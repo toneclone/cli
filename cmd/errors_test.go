@@ -24,6 +24,7 @@ func TestClassifyErrorCodes(t *testing.T) {
 		{"typed paywall", client.ErrorResponse{ErrorMsg: "nope", Code: "paywall"}, "paywall", false},
 		{"typed plan_limit", client.ErrorResponse{ErrorMsg: "nope", Code: "plan_limit"}, "paywall", false},
 		{"typed unknown code", client.ErrorResponse{ErrorMsg: "nope", Code: ""}, "error", false},
+		{"typed invalid api key", client.ErrorResponse{ErrorMsg: "invalid API key", Code: ""}, "auth_required", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

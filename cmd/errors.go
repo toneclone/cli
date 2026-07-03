@@ -78,7 +78,17 @@ func classifyErrorResponse(e client.ErrorResponse) errorEnvelope {
 	case "paywall", "payment_required", "plan_limit":
 		code = "paywall"
 	case "":
-		code = "error"
+		// The backend does not always set a machine code; fall back to
+		// message inspection so auth failures classify consistently.
+		lower := strings.ToLower(e.Error())
+		switch {
+		case strings.Contains(lower, "invalid api key"),
+			strings.Contains(lower, "unauthorized"),
+			strings.Contains(lower, "authentication required"):
+			code = "auth_required"
+		default:
+			code = "error"
+		}
 	}
 	return errorEnvelope{Code: code, Message: e.Error(), Retryable: false, DocsURL: docsURL}
 }
