@@ -10,6 +10,13 @@ type GenerateClient struct {
 	client *Client
 }
 
+type generateResponseBody struct {
+	Content   string `json:"content"`
+	Done      bool   `json:"done"`
+	SessionID string `json:"sessionId"`
+	ReviewURL string `json:"reviewUrl"`
+}
+
 // NewGenerateClient creates a new generate client
 func NewGenerateClient(client *Client) *GenerateClient {
 	return &GenerateClient{client: client}
@@ -22,12 +29,7 @@ func (g *GenerateClient) Text(ctx context.Context, request *GenerateTextRequest)
 	request.Streaming = &streaming
 
 	// Use the standard client Post method for JSON response
-	var response struct {
-		Content   string `json:"content"`
-		Done      bool   `json:"done"`
-		SessionID string `json:"sessionId"`
-		ReviewURL string `json:"reviewUrl"`
-	}
+	var response generateResponseBody
 
 	if err := g.client.Post(ctx, "/query", request, &response); err != nil {
 		return nil, fmt.Errorf("failed to generate text: %w", err)
@@ -53,12 +55,7 @@ func (g *GenerateClient) Humanize(ctx context.Context, text, personaID string, c
 		CreateSession: createSession,
 	}
 
-	var response struct {
-		Content   string `json:"content"`
-		Done      bool   `json:"done"`
-		SessionID string `json:"sessionId"`
-		ReviewURL string `json:"reviewUrl"`
-	}
+	var response generateResponseBody
 
 	if err := g.client.Post(ctx, "/query/humanize", request, &response); err != nil {
 		return nil, fmt.Errorf("failed to humanize text: %w", err)

@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -67,6 +68,12 @@ func TestWriteHasDraftsFlag(t *testing.T) {
 	}
 }
 
+func TestWriteUsesGlobalJSONFlagOnly(t *testing.T) {
+	if f := writeCmd.Flags().Lookup("output"); f != nil {
+		t.Fatalf("write should use global --json instead of legacy --output flag")
+	}
+}
+
 func TestValidateWriteDraftsRange(t *testing.T) {
 	for _, drafts := range []int{1, 2, 5} {
 		if err := validateWriteDrafts(drafts); err != nil {
@@ -77,5 +84,22 @@ func TestValidateWriteDraftsRange(t *testing.T) {
 		if err := validateWriteDrafts(drafts); err == nil {
 			t.Errorf("validateWriteDrafts(%d) error = nil, want range error", drafts)
 		}
+	}
+}
+
+func TestRunWriteRejectsInvalidDraftsBeforeAuth(t *testing.T) {
+	oldDrafts := writeDrafts
+	writeDrafts = 0
+	t.Cleanup(func() { writeDrafts = oldDrafts })
+
+	err := runWrite(nil, nil)
+	if err == nil {
+		t.Fatal("expected range error")
+	}
+	if !strings.Contains(err.Error(), "--drafts must be between 1 and 5") {
+		t.Fatalf("expected drafts range error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "authentication") {
+		t.Fatalf("expected validation before auth, got %v", err)
 	}
 }

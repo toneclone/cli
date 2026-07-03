@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/toneclone/cli/internal/config"
 	"github.com/toneclone/cli/pkg/client"
 )
 
@@ -31,24 +29,12 @@ func init() {
 }
 
 func runQuota(cmd *cobra.Command, args []string) error {
-	cfg, err := config.LoadConfig()
+	apiClient, err := newAPIClient(30)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
 
-	keyConfig, err := cfg.GetCurrentKey()
-	if err != nil {
-		return fmt.Errorf("authentication required: %w", err)
-	}
-
-	apiClient := client.NewToneCloneClientFromConfig(
-		keyConfig.BaseURL,
-		keyConfig.Key,
-		30*time.Second,
-	)
-
-	ctx := context.Background()
-	q, err := apiClient.GetQuota(ctx)
+	q, err := apiClient.GetQuota(cmd.Context())
 	if err != nil {
 		return err
 	}

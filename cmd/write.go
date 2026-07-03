@@ -13,7 +13,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/toneclone/cli/internal/config"
 	"github.com/toneclone/cli/pkg/client"
 )
 
@@ -23,7 +22,6 @@ var (
 	writeKnowledge  string
 	writePrompt     string
 	writeFile       string
-	writeOutput     string
 	writeVerbose    bool
 	writeTimeout    int
 	writeReviewLink bool
@@ -57,8 +55,7 @@ Knowledge Card Support:
   --knowledge "123,456"        Multiple knowledge cards by ID
 
 Output Options:
-  --output text     Plain text output (default)
-  --output json     JSON output with metadata
+  --json            JSON output with metadata
   --verbose         Show generation metadata and statistics`,
 	RunE: runWrite,
 }
@@ -71,7 +68,6 @@ func init() {
 	writeCmd.Flags().StringVar(&writeKnowledge, "knowledge", "", "knowledge card ID or name (supports comma-separated multiple cards)")
 	writeCmd.Flags().StringVar(&writePrompt, "prompt", "", "text prompt for generation")
 	writeCmd.Flags().StringVar(&writeFile, "file", "", "file containing the prompt")
-	writeCmd.Flags().StringVar(&writeOutput, "output", "text", "output format: text, json")
 	writeCmd.Flags().BoolVar(&writeVerbose, "verbose", false, "show generation metadata and statistics")
 	writeCmd.Flags().IntVar(&writeTimeout, "timeout", 30, "request timeout in seconds")
 	writeCmd.Flags().BoolVar(&writeReviewLink, "review-link", false, "create a web review session and return a reviewUrl for the draft")
@@ -86,24 +82,10 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Load configuration
-	cfg, err := config.LoadConfig()
+	apiClient, err := newAPIClient(writeTimeout)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	// Get current API key
-	keyConfig, err := cfg.GetCurrentKey()
-	if err != nil {
-		return fmt.Errorf("authentication required: %w", err)
-	}
-
-	// Create API client
-	apiClient := client.NewToneCloneClientFromConfig(
-		keyConfig.BaseURL,
-		keyConfig.Key,
-		time.Duration(writeTimeout)*time.Second,
-	)
 
 	// Get the prompt
 	prompt, err := getWritePrompt()
@@ -201,7 +183,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return classifyRateLimit(err)
 		}
-		if jsonOutput || writeOutput == "json" {
+		if jsonOutput {
 			return outputDraftsJSON(drafts, persona)
 		}
 		return outputDraftsText(drafts, persona)
@@ -213,7 +195,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output based on format
-	if jsonOutput || writeOutput == "json" {
+	if jsonOutput {
 		return outputWriteJSON(response, persona)
 	}
 
