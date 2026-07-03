@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/toneclone/cli/internal/config"
 	"github.com/toneclone/cli/pkg/client"
 )
 
@@ -76,22 +75,6 @@ func init() {
 	humanizeCmd.Flags().StringVar(&humanizeFile, "file", "", "file containing text to humanize")
 	humanizeCmd.Flags().IntVar(&humanizeTimeout, "timeout", 30, "request timeout in seconds")
 	humanizeCmd.Flags().BoolVar(&humanizeReviewLink, "review-link", false, "create a web review session and return a reviewUrl")
-}
-
-func newAPIClient(timeout int) (*client.ToneCloneClient, error) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-	keyConfig, err := cfg.GetCurrentKey()
-	if err != nil {
-		return nil, fmt.Errorf("authentication required: %w", err)
-	}
-	return client.NewToneCloneClientFromConfig(
-		keyConfig.BaseURL,
-		keyConfig.Key,
-		time.Duration(timeout)*time.Second,
-	), nil
 }
 
 // sourceText resolves input from --text, --file, or stdin (in that order).

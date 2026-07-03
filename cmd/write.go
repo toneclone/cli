@@ -22,6 +22,7 @@ var (
 	writeKnowledge  string
 	writePrompt     string
 	writeFile       string
+	writeOutput     string
 	writeVerbose    bool
 	writeTimeout    int
 	writeReviewLink bool
@@ -68,6 +69,9 @@ func init() {
 	writeCmd.Flags().StringVar(&writeKnowledge, "knowledge", "", "knowledge card ID or name (supports comma-separated multiple cards)")
 	writeCmd.Flags().StringVar(&writePrompt, "prompt", "", "text prompt for generation")
 	writeCmd.Flags().StringVar(&writeFile, "file", "", "file containing the prompt")
+	writeCmd.Flags().StringVar(&writeOutput, "output", "", "deprecated compatibility alias: use --json for JSON output")
+	writeCmd.Flags().MarkDeprecated("output", "use global --json instead")
+	writeCmd.Flags().MarkHidden("output")
 	writeCmd.Flags().BoolVar(&writeVerbose, "verbose", false, "show generation metadata and statistics")
 	writeCmd.Flags().IntVar(&writeTimeout, "timeout", 30, "request timeout in seconds")
 	writeCmd.Flags().BoolVar(&writeReviewLink, "review-link", false, "create a web review session and return a reviewUrl for the draft")
@@ -79,6 +83,9 @@ func init() {
 
 func runWrite(cmd *cobra.Command, args []string) error {
 	if err := validateWriteDrafts(writeDrafts); err != nil {
+		return err
+	}
+	if err := validateWriteOutput(writeOutput); err != nil {
 		return err
 	}
 
@@ -183,7 +190,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return classifyRateLimit(err)
 		}
-		if jsonOutput {
+		if writeWantsJSON() {
 			return outputDraftsJSON(drafts, persona)
 		}
 		return outputDraftsText(drafts, persona)
@@ -195,7 +202,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output based on format
-	if jsonOutput {
+	if writeWantsJSON() {
 		return outputWriteJSON(response, persona)
 	}
 
@@ -207,6 +214,19 @@ func validateWriteDrafts(drafts int) error {
 		return fmt.Errorf("--drafts must be between 1 and 5")
 	}
 	return nil
+}
+
+func validateWriteOutput(output string) error {
+	switch output {
+	case "", "text", "json":
+		return nil
+	default:
+		return fmt.Errorf("--output is deprecated; use --json for JSON output")
+	}
+}
+
+func writeWantsJSON() bool {
+	return jsonOutput || writeOutput == "json"
 }
 
 // classifyRateLimit preserves the friendly rate-limit message while wrapping the

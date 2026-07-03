@@ -68,9 +68,16 @@ func TestWriteHasDraftsFlag(t *testing.T) {
 	}
 }
 
-func TestWriteUsesGlobalJSONFlagOnly(t *testing.T) {
-	if f := writeCmd.Flags().Lookup("output"); f != nil {
-		t.Fatalf("write should use global --json instead of legacy --output flag")
+func TestWriteOutputFlagIsDeprecatedCompatibilityAlias(t *testing.T) {
+	f := writeCmd.Flags().Lookup("output")
+	if f == nil {
+		t.Fatal("expected deprecated --output compatibility alias")
+	}
+	if !f.Hidden {
+		t.Fatal("expected --output to be hidden from help")
+	}
+	if err := validateWriteOutput("json"); err != nil {
+		t.Fatalf("expected --output json compatibility path, got %v", err)
 	}
 }
 
@@ -87,12 +94,25 @@ func TestValidateWriteDraftsRange(t *testing.T) {
 	}
 }
 
-func TestRunWriteRejectsInvalidDraftsBeforeAuth(t *testing.T) {
+func TestWriteCommandRejectsInvalidDraftsBeforeAuth(t *testing.T) {
 	oldDrafts := writeDrafts
-	writeDrafts = 0
+	oldPersona := writePersona
+	oldPrompt := writePrompt
+	oldArgs := writeCmd.Flags().Args()
+	oldFlagValue := writeCmd.Flags().Lookup("drafts").Value.String()
 	t.Cleanup(func() { writeDrafts = oldDrafts })
+	t.Cleanup(func() {
+		writePersona = oldPersona
+		writePrompt = oldPrompt
+		writeCmd.Flags().Set("drafts", oldFlagValue)
+		writeCmd.Flags().SetInterspersed(true)
+		_ = oldArgs
+	})
 
-	err := runWrite(nil, nil)
+	writePersona = "whatever"
+	writePrompt = "hi"
+	writeCmd.Flags().Set("drafts", "0")
+	err := writeCmd.RunE(writeCmd, nil)
 	if err == nil {
 		t.Fatal("expected range error")
 	}
