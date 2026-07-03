@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,6 +27,7 @@ var (
 	writeVerbose    bool
 	writeTimeout    int
 	writeReviewLink bool
+	writeDrafts     int
 )
 
 // writeCmd represents the write command
@@ -73,6 +75,7 @@ func init() {
 	writeCmd.Flags().BoolVar(&writeVerbose, "verbose", false, "show generation metadata and statistics")
 	writeCmd.Flags().IntVar(&writeTimeout, "timeout", 30, "request timeout in seconds")
 	writeCmd.Flags().BoolVar(&writeReviewLink, "review-link", false, "create a web review session and return a reviewUrl for the draft")
+	writeCmd.Flags().IntVarP(&writeDrafts, "drafts", "n", 1, "number of draft variants to generate (1-5), each from a different angle")
 
 	// Make persona required
 	writeCmd.MarkFlagRequired("persona")
@@ -187,16 +190,25 @@ func runWrite(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(writeTimeout)*time.Second)
 	defer cancel()
 
+	// Multi-draft path: request several variants and render them together.
+	if writeDrafts > 1 {
+		if writeDrafts > 5 {
+			return fmt.Errorf("--drafts must be between 1 and 5")
+		}
+		request.N = writeDrafts
+		drafts, err := apiClient.Generate.TextVariants(ctx, request)
+		if err != nil {
+			return classifyRateLimit(err)
+		}
+		if jsonOutput || writeOutput == "json" {
+			return outputDraftsJSON(drafts, persona)
+		}
+		return outputDraftsText(drafts, persona)
+	}
+
 	response, err := apiClient.Generate.Text(ctx, request)
 	if err != nil {
-		// Check for rate limit error and provide helpful message
-		if rateLimitErr, ok := err.(*client.RateLimitError); ok {
-			if rateLimitErr.RetryAfterSeconds > 0 {
-				return fmt.Errorf("Rate limit exceeded. Please try again in %d seconds", rateLimitErr.RetryAfterSeconds)
-			}
-			return fmt.Errorf("Rate limit exceeded. Please wait before making another request")
-		}
-		return fmt.Errorf("text generation failed: %w", err)
+		return classifyRateLimit(err)
 	}
 
 	// Output based on format
@@ -205,6 +217,19 @@ func runWrite(cmd *cobra.Command, args []string) error {
 	}
 
 	return outputWriteText(response, persona)
+}
+
+// classifyRateLimit preserves the friendly rate-limit message while wrapping the
+// typed error (%w) so the global classifier can still emit a structured code.
+func classifyRateLimit(err error) error {
+	var rateLimitErr *client.RateLimitError
+	if errors.As(err, &rateLimitErr) {
+		if rateLimitErr.RetryAfterSeconds > 0 {
+			return fmt.Errorf("Rate limit exceeded. Please try again in %d seconds: %w", rateLimitErr.RetryAfterSeconds, err)
+		}
+		return fmt.Errorf("Rate limit exceeded. Please wait before making another request: %w", err)
+	}
+	return fmt.Errorf("text generation failed: %w", err)
 }
 
 func getWritePrompt() (string, error) {
@@ -322,6 +347,58 @@ func outputWriteJSON(response *client.GenerateTextResponse, persona *client.Pers
 		output["sessionId"] = response.SessionID
 	}
 
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
+}
+
+func outputDraftsText(drafts *client.GenerateDraftsResponse, persona *client.Persona) error {
+	if drafts.AnglePlan != nil && drafts.AnglePlan.StrategyNote != "" {
+		fmt.Fprintf(os.Stderr, "Strategy: %s\n\n", drafts.AnglePlan.StrategyNote)
+	}
+	for i, v := range drafts.Variants {
+		label := fmt.Sprintf("Draft %d", i+1)
+		if v.Angle != nil {
+			if v.Angle.ShortLabel != "" {
+				label = fmt.Sprintf("Draft %d - %s", i+1, v.Angle.ShortLabel)
+			} else if v.Angle.Title != "" {
+				label = fmt.Sprintf("Draft %d - %s", i+1, v.Angle.Title)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "=== %s ===\n", label)
+		fmt.Print(v.Content)
+		if !strings.HasSuffix(v.Content, "\n") {
+			fmt.Println()
+		}
+		if i < len(drafts.Variants)-1 {
+			fmt.Println()
+		}
+	}
+	if drafts.ReviewURL != "" {
+		fmt.Fprintf(os.Stderr, "\nReview/edit: %s\n", drafts.ReviewURL)
+	}
+	return nil
+}
+
+func outputDraftsJSON(drafts *client.GenerateDraftsResponse, persona *client.Persona) error {
+	output := map[string]interface{}{
+		"drafts": drafts.Variants,
+	}
+	if persona != nil {
+		output["persona"] = map[string]string{
+			"id":   persona.PersonaID,
+			"name": persona.Name,
+		}
+	}
+	if drafts.AnglePlan != nil {
+		output["anglePlan"] = drafts.AnglePlan
+	}
+	if drafts.ReviewURL != "" {
+		output["reviewUrl"] = drafts.ReviewURL
+	}
+	if drafts.SessionID != "" {
+		output["sessionId"] = drafts.SessionID
+	}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)

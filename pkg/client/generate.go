@@ -75,6 +75,20 @@ func (g *GenerateClient) Humanize(ctx context.Context, text, personaID string, c
 	}, nil
 }
 
+// TextVariants generates multiple draft variants (n 1..5) in a single
+// non-streaming request. Each variant may carry a planned editorial angle when
+// the backend produced an angle plan.
+func (g *GenerateClient) TextVariants(ctx context.Context, request *GenerateTextRequest) (*GenerateDraftsResponse, error) {
+	streaming := false
+	request.Streaming = &streaming
+
+	var response GenerateDraftsResponse
+	if err := g.client.Post(ctx, "/query", request, &response); err != nil {
+		return nil, fmt.Errorf("failed to generate drafts: %w", err)
+	}
+	return &response, nil
+}
+
 // SimpleText generates text with just a prompt and optional persona
 func (g *GenerateClient) SimpleText(ctx context.Context, prompt string, personaID ...string) (string, error) {
 	request := &GenerateTextRequest{

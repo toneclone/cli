@@ -58,7 +58,7 @@ func primeGuide() primeGuideDoc {
 			{Name: "quota", Example: "toneclone quota --json", Description: "Check the current plan and remaining usage before generating."},
 			{Name: "personas list", Example: "toneclone personas list --json", Description: "List available personas (user + built-in). Pick one before generating."},
 			{Name: "knowledge list", Example: "toneclone knowledge list --json", Description: "List knowledge cards that can add context/style to a generation."},
-			{Name: "write", Example: "toneclone write --persona=\"Founder\" --prompt=\"...\" --json", Description: "Write new content in a persona's voice. Accepts --prompt, --file, or stdin."},
+			{Name: "write", Example: "toneclone write --persona=\"Founder\" --prompt=\"...\" --json", Description: "Write new content in a persona's voice. Accepts --prompt, --file, or stdin. Use -n/--drafts 2-5 for multiple angled drafts."},
 			{Name: "personalize", Example: "toneclone personalize --persona=\"Founder\" --text=\"...\" --json", Description: "Rewrite existing text in a persona's voice, preserving meaning. Accepts --text, --file, or stdin."},
 			{Name: "humanize", Example: "toneclone humanize --text=\"...\" --json", Description: "Strip AI-sounding phrasing from existing text via StyleGuard. No persona required; does not use quota."},
 			{Name: "training add", Example: "toneclone training add --file=sample.md --persona=\"Founder\"", Description: "Add a writing sample to improve a persona's voice."},

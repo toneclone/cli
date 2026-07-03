@@ -56,3 +56,13 @@ func TestVerbsRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteHasDraftsFlag(t *testing.T) {
+	f := writeCmd.Flags().Lookup("drafts")
+	if f == nil {
+		t.Fatal("expected --drafts flag on write")
+	}
+	if f.Shorthand != "n" {
+		t.Errorf("expected -n shorthand, got %q", f.Shorthand)
+	}
+}
