@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,5 +167,86 @@ func TestWriteCommandParsesOutputAliasQuietlyBeforeDraftValidation(t *testing.T)
 	}
 	if stderr.String() != "" {
 		t.Fatalf("expected compatibility alias to be quiet on stderr, got %q", stderr.String())
+	}
+}
+
+func TestExecuteRendersOutputAliasEarlyFailureAsJSON(t *testing.T) {
+	oldArgs := os.Args
+	oldJSON := jsonOutput
+	oldRootSilenceUsage := rootCmd.SilenceUsage
+	oldRootSilenceErrors := rootCmd.SilenceErrors
+	rootCmd.SetArgs(nil)
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldStderr := os.Stderr
+	os.Stderr = stderrWriter
+	t.Cleanup(func() {
+		os.Args = oldArgs
+		jsonOutput = oldJSON
+		rootCmd.SetArgs(nil)
+		rootCmd.SilenceUsage = oldRootSilenceUsage
+		rootCmd.SilenceErrors = oldRootSilenceErrors
+		os.Stderr = oldStderr
+		stderrReader.Close()
+		stderrWriter.Close()
+	})
+
+	os.Args = []string{"toneclone", "write", "--persona", "whatever", "--prompt", "hi", "--drafts", "0", "--output", "json"}
+	err = Execute()
+	stderrWriter.Close()
+	stderrBytes, _ := io.ReadAll(stderrReader)
+	stderr := string(stderrBytes)
+	if err == nil {
+		t.Fatal("expected drafts range error")
+	}
+	if !strings.Contains(stderr, `"message":"--drafts must be between 1 and 5"`) &&
+		!strings.Contains(stderr, `"message": "--drafts must be between 1 and 5"`) {
+		t.Fatalf("expected structured JSON error for output alias, got %q", stderr)
+	}
+	if strings.Contains(stderr, "Error:") {
+		t.Fatalf("expected JSON error, got plain error output %q", stderr)
+	}
+
+	os.Args = []string{"toneclone", "write", "--persona", "whatever", "--prompt", "hi", "--drafts", "0"}
+	jsonOutput = true
+	stderrReader2, stderrWriter2, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = stderrWriter2
+	err = Execute()
+	stderrWriter2.Close()
+	stderrBytes2, _ := io.ReadAll(stderrReader2)
+	stderr2 := string(stderrBytes2)
+	stderrReader2.Close()
+	if err == nil {
+		t.Fatal("expected drafts range error on second execution")
+	}
+	if strings.Contains(stderr2, `"message"`) {
+		t.Fatalf("expected jsonOutput reset without alias/--json, got %q", stderr2)
+	}
+	if !strings.Contains(stderr2, "Error: --drafts must be between 1 and 5") {
+		t.Fatalf("expected plain error after jsonOutput reset, got %q", stderr2)
+	}
+}
+
+func TestWriteOutputAliasRequestsJSON(t *testing.T) {
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"write", "--output", "json"}, true},
+		{[]string{"write", "--output=json"}, true},
+		{[]string{"--profile", "dev", "write", "--output", "json"}, true},
+		{[]string{"write", "--output", "text"}, false},
+		{[]string{"quota", "--output", "json"}, false},
+		{[]string{"write"}, false},
+	}
+	for _, tt := range tests {
+		if got := writeOutputAliasRequestsJSON(tt.args); got != tt.want {
+			t.Errorf("writeOutputAliasRequestsJSON(%v) = %v, want %v", tt.args, got, tt.want)
+		}
 	}
 }

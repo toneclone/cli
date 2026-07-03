@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -49,6 +50,12 @@ For more help on any command, use:
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
+	// Reset per-execution JSON mode before Cobra parses flags. Cobra will set
+	// jsonOutput again for the real --json flag; this pre-scan exists only for
+	// the hidden write --output=json compatibility alias so centralized error
+	// rendering can emit JSON even for early validation failures.
+	jsonOutput = writeOutputAliasRequestsJSON(os.Args[1:])
+
 	// Silence cobra's built-in error and usage printing so we can render errors
 	// ourselves (a structured envelope in --json mode) and keep runtime failures
 	// clean for scripts and agents. Argument/flag mistakes still print a clear
@@ -61,6 +68,29 @@ func Execute() error {
 		renderCommandError(err)
 	}
 	return err
+}
+
+func writeOutputAliasRequestsJSON(args []string) bool {
+	writeIndex := -1
+	for i, arg := range args {
+		if arg == "write" {
+			writeIndex = i
+			break
+		}
+	}
+	if writeIndex == -1 {
+		return false
+	}
+	for i := writeIndex + 1; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--output" && i+1 < len(args):
+			return strings.EqualFold(args[i+1], "json")
+		case strings.HasPrefix(arg, "--output="):
+			return strings.EqualFold(strings.TrimPrefix(arg, "--output="), "json")
+		}
+	}
+	return false
 }
 
 func init() {
