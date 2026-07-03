@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ const (
 type Client struct {
 	baseURL    string
 	apiKey     string
+	devAuthKey string
 	httpClient *http.Client
 	userAgent  string
 	timeout    time.Duration
@@ -35,10 +37,11 @@ type ClientOption func(*Client)
 // NewClient creates a new ToneClone API client
 func NewClient(apiKey string, options ...ClientOption) *Client {
 	client := &Client{
-		baseURL:   DefaultBaseURL,
-		apiKey:    apiKey,
-		userAgent: fmt.Sprintf("toneclone-cli/%s", APIVersion),
-		timeout:   DefaultTimeout,
+		baseURL:    DefaultBaseURL,
+		apiKey:     apiKey,
+		devAuthKey: os.Getenv("TONECLONE_DEV_AUTH"),
+		userAgent:  fmt.Sprintf("toneclone-cli/%s", APIVersion),
+		timeout:    DefaultTimeout,
 		httpClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
@@ -143,6 +146,9 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body inte
 
 	// Set headers
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.devAuthKey != "" {
+		req.Header.Set("X-Dev-Auth", c.devAuthKey)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
@@ -178,35 +184,35 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 			// If we can't parse the error response, return a generic error
 			return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
 		}
-		
+
 		// Handle rate limiting specifically
 		if resp.StatusCode == http.StatusTooManyRequests {
 			rateLimitErr := &RateLimitError{
 				ErrorResponse: errorResp,
 			}
-			
+
 			// Parse rate limiting headers
 			if remaining := resp.Header.Get("X-RateLimit-Remaining"); remaining != "" {
 				if val, err := strconv.Atoi(remaining); err == nil {
 					rateLimitErr.RemainingRequests = val
 				}
 			}
-			
+
 			if reset := resp.Header.Get("X-RateLimit-Reset"); reset != "" {
 				if timestamp, err := strconv.ParseInt(reset, 10, 64); err == nil {
 					rateLimitErr.ResetTime = time.Unix(timestamp, 0)
 				}
 			}
-			
+
 			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
 				if val, err := strconv.Atoi(retryAfter); err == nil {
 					rateLimitErr.RetryAfterSeconds = val
 				}
 			}
-			
+
 			return rateLimitErr
 		}
-		
+
 		return errorResp
 	}
 
@@ -305,17 +311,17 @@ func (c *Client) WithContext(ctx context.Context) context.Context {
 func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
 	maxRetries := 3
 	baseDelay := time.Second
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		err := c.doRequest(ctx, method, endpoint, body, result)
-		
+
 		// Check if it's a rate limit error
 		if rateLimitErr, ok := err.(*RateLimitError); ok {
 			// Don't retry on the last attempt
 			if attempt == maxRetries-1 {
 				return rateLimitErr
 			}
-			
+
 			// Calculate delay - prefer Retry-After header, fallback to exponential backoff
 			var delay time.Duration
 			if rateLimitErr.RetryAfterSeconds > 0 {
@@ -324,12 +330,12 @@ func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string
 				// Exponential backoff: 1s, 2s, 4s...
 				delay = baseDelay * time.Duration(1<<attempt)
 			}
-			
+
 			// Don't wait longer than 60 seconds
 			if delay > 60*time.Second {
 				delay = 60 * time.Second
 			}
-			
+
 			// Wait before retrying
 			select {
 			case <-ctx.Done():
@@ -338,10 +344,10 @@ func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string
 				continue // Retry
 			}
 		}
-		
+
 		// If it's not a rate limit error, return immediately
 		return err
 	}
-	
+
 	return fmt.Errorf("max retries exceeded")
 }

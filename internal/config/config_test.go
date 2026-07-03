@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
 )
 
 func TestNewConfig(t *testing.T) {
@@ -288,6 +290,65 @@ func TestGetCurrentKey(t *testing.T) {
 
 	if key.Timeout != cfg.DefaultTimeout {
 		t.Errorf("Expected Timeout to be default %d, got %d", cfg.DefaultTimeout, key.Timeout)
+	}
+}
+
+func TestEnvironmentAPIKeyOverridesStoredDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".toneclone.yaml")
+
+	cfg := NewConfig()
+	cfg.AddKey("main", "tc_live_storeddefault", "https://api.toneclone.ai")
+	cfg.DefaultKey = "main"
+	if err := cfg.SaveConfig(configPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	t.Setenv("TONECLONE_API_KEY", "tc_test_environment")
+	t.Setenv("TONECLONE_BASE_URL", "https://dev.example.test")
+
+	oldConfigFile := viper.ConfigFileUsed()
+	viper.SetConfigFile(configPath)
+	t.Cleanup(func() {
+		viper.SetConfigFile(oldConfigFile)
+	})
+
+	loaded, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	key, err := loaded.GetCurrentKey()
+	if err != nil {
+		t.Fatalf("GetCurrentKey() error = %v", err)
+	}
+	if key.Key != "tc_test_environment" {
+		t.Errorf("key = %q, want env key", key.Key)
+	}
+	if key.BaseURL != "https://dev.example.test" {
+		t.Errorf("baseURL = %q, want env base URL", key.BaseURL)
+	}
+	if got := loaded.GetCurrentKeyName(); got != "environment" {
+		t.Errorf("GetCurrentKeyName() = %q, want environment", got)
+	}
+}
+
+func TestEnvironmentBaseURLDoesNotRedirectStoredKey(t *testing.T) {
+	cfg := NewConfig()
+	cfg.AddKey("main", "tc_live_storeddefault", "https://api.toneclone.ai")
+	cfg.DefaultKey = "main"
+
+	t.Setenv("TONECLONE_BASE_URL", "https://dev.example.test")
+
+	key, err := cfg.GetCurrentKey()
+	if err != nil {
+		t.Fatalf("GetCurrentKey() error = %v", err)
+	}
+	if key.Key != "tc_live_storeddefault" {
+		t.Errorf("key = %q, want stored key", key.Key)
+	}
+	if key.BaseURL != "https://api.toneclone.ai" {
+		t.Errorf("baseURL = %q, want stored base URL", key.BaseURL)
 	}
 }
 

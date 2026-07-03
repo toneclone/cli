@@ -112,14 +112,16 @@ func (c *Config) GetCurrentKey() (APIKeyConfig, error) {
 	profile := viper.GetString("profile")
 	keyName := profile
 
-	// If no profile specified, use default
-	if keyName == "" {
-		keyName = c.DefaultKey
-	}
-
-	// If still no key name, check for environment variable
+	// Environment variables should override the stored default key so agents and
+	// scripts can reliably point the CLI at a specific backend without mutating
+	// the user's on-disk config. An explicit profile still wins.
 	if keyName == "" && os.Getenv("TONECLONE_API_KEY") != "" {
 		keyName = "environment"
+	}
+
+	// If no profile or environment key is specified, use the stored default.
+	if keyName == "" {
+		keyName = c.DefaultKey
 	}
 
 	if keyName == "" {
@@ -149,12 +151,12 @@ func (c *Config) GetCurrentKeyName() string {
 		return profile
 	}
 
-	if c.DefaultKey != "" {
-		return c.DefaultKey
-	}
-
 	if os.Getenv("TONECLONE_API_KEY") != "" {
 		return "environment"
+	}
+
+	if c.DefaultKey != "" {
+		return c.DefaultKey
 	}
 
 	return ""
