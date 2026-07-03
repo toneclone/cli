@@ -82,6 +82,10 @@ func init() {
 }
 
 func runWrite(cmd *cobra.Command, args []string) error {
+	if err := validateWriteDrafts(writeDrafts); err != nil {
+		return err
+	}
+
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -192,9 +196,6 @@ func runWrite(cmd *cobra.Command, args []string) error {
 
 	// Multi-draft path: request several variants and render them together.
 	if writeDrafts > 1 {
-		if writeDrafts > 5 {
-			return fmt.Errorf("--drafts must be between 1 and 5")
-		}
 		request.N = writeDrafts
 		drafts, err := apiClient.Generate.TextVariants(ctx, request)
 		if err != nil {
@@ -217,6 +218,13 @@ func runWrite(cmd *cobra.Command, args []string) error {
 	}
 
 	return outputWriteText(response, persona)
+}
+
+func validateWriteDrafts(drafts int) error {
+	if drafts < 1 || drafts > 5 {
+		return fmt.Errorf("--drafts must be between 1 and 5")
+	}
+	return nil
 }
 
 // classifyRateLimit preserves the friendly rate-limit message while wrapping the

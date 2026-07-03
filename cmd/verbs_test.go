@@ -66,3 +66,16 @@ func TestWriteHasDraftsFlag(t *testing.T) {
 		t.Errorf("expected -n shorthand, got %q", f.Shorthand)
 	}
 }
+
+func TestValidateWriteDraftsRange(t *testing.T) {
+	for _, drafts := range []int{1, 2, 5} {
+		if err := validateWriteDrafts(drafts); err != nil {
+			t.Errorf("validateWriteDrafts(%d) error = %v, want nil", drafts, err)
+		}
+	}
+	for _, drafts := range []int{-1, 0, 6} {
+		if err := validateWriteDrafts(drafts); err == nil {
+			t.Errorf("validateWriteDrafts(%d) error = nil, want range error", drafts)
+		}
+	}
+}
