@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,9 @@ func TestWriteHasDraftsFlag(t *testing.T) {
 }
 
 func TestWriteOutputFlagIsDeprecatedCompatibilityAlias(t *testing.T) {
+	oldJSON := jsonOutput
+	t.Cleanup(func() { jsonOutput = oldJSON })
+
 	f := writeCmd.Flags().Lookup("output")
 	if f == nil {
 		t.Fatal("expected deprecated --output compatibility alias")
@@ -76,7 +80,7 @@ func TestWriteOutputFlagIsDeprecatedCompatibilityAlias(t *testing.T) {
 	if !f.Hidden {
 		t.Fatal("expected --output to be hidden from help")
 	}
-	if err := validateWriteOutput("json"); err != nil {
+	if err := normalizeWriteOutput("json"); err != nil {
 		t.Fatalf("expected --output json compatibility path, got %v", err)
 	}
 }
@@ -98,15 +102,12 @@ func TestWriteCommandRejectsInvalidDraftsBeforeAuth(t *testing.T) {
 	oldDrafts := writeDrafts
 	oldPersona := writePersona
 	oldPrompt := writePrompt
-	oldArgs := writeCmd.Flags().Args()
 	oldFlagValue := writeCmd.Flags().Lookup("drafts").Value.String()
 	t.Cleanup(func() { writeDrafts = oldDrafts })
 	t.Cleanup(func() {
 		writePersona = oldPersona
 		writePrompt = oldPrompt
 		writeCmd.Flags().Set("drafts", oldFlagValue)
-		writeCmd.Flags().SetInterspersed(true)
-		_ = oldArgs
 	})
 
 	writePersona = "whatever"
@@ -121,5 +122,49 @@ func TestWriteCommandRejectsInvalidDraftsBeforeAuth(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "authentication") {
 		t.Fatalf("expected validation before auth, got %v", err)
+	}
+}
+
+func TestWriteCommandParsesOutputAliasQuietlyBeforeDraftValidation(t *testing.T) {
+	oldDrafts := writeDrafts
+	oldPersona := writePersona
+	oldPrompt := writePrompt
+	oldOutput := writeOutput
+	oldJSON := jsonOutput
+	oldDraftFlag := writeCmd.Flags().Lookup("drafts").Value.String()
+	oldOutputFlag := writeCmd.Flags().Lookup("output").Value.String()
+	oldRootSilenceUsage := rootCmd.SilenceUsage
+	oldRootSilenceErrors := rootCmd.SilenceErrors
+	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	rootCmd.SetErr(&stderr)
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetArgs([]string{"write", "--persona", "whatever", "--prompt", "hi", "--drafts", "0", "--output", "json"})
+	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
+	t.Cleanup(func() {
+		writeDrafts = oldDrafts
+		writePersona = oldPersona
+		writePrompt = oldPrompt
+		writeOutput = oldOutput
+		jsonOutput = oldJSON
+		writeCmd.Flags().Set("drafts", oldDraftFlag)
+		writeCmd.Flags().Set("output", oldOutputFlag)
+		rootCmd.SetArgs(nil)
+		rootCmd.SetErr(os.Stderr)
+		rootCmd.SetOut(os.Stdout)
+		rootCmd.SilenceUsage = oldRootSilenceUsage
+		rootCmd.SilenceErrors = oldRootSilenceErrors
+	})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected drafts range error")
+	}
+	if !strings.Contains(err.Error(), "--drafts must be between 1 and 5") {
+		t.Fatalf("expected drafts range error, got %v", err)
+	}
+	if stderr.String() != "" {
+		t.Fatalf("expected compatibility alias to be quiet on stderr, got %q", stderr.String())
 	}
 }
