@@ -1,0 +1,58 @@
+package cmd
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestSourceTextPrefersTextOverFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.md")
+	if err := os.WriteFile(path, []byte("file body"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := sourceText("inline", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "inline" {
+		t.Errorf("expected inline, got %q", got)
+	}
+}
+
+func TestSourceTextReadsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.md")
+	if err := os.WriteFile(path, []byte("file body"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := sourceText("", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "file body" {
+		t.Errorf("expected file body, got %q", got)
+	}
+}
+
+func TestSourceTextMissingFile(t *testing.T) {
+	if _, err := sourceText("", "/nonexistent/nope.md"); err == nil {
+		t.Error("expected error for missing file")
+	}
+}
+
+func TestVerbsRegistered(t *testing.T) {
+	for _, name := range []string{"personalize", "humanize", "quota", "prime"} {
+		found := false
+		for _, c := range rootCmd.Commands() {
+			if c.Name() == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected %q command registered on root", name)
+		}
+	}
+}

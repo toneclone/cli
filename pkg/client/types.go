@@ -117,10 +117,13 @@ type TrainingFileListResponse struct {
 type GenerateTextRequest struct {
 	Prompt           string   `json:"prompt"`
 	PersonaID        string   `json:"personaId"`
+	Mode             string   `json:"mode,omitempty"`
+	Text             string   `json:"text,omitempty"`
 	KnowledgeCardID  string   `json:"knowledgeCardId,omitempty"`
 	KnowledgeCardIDs []string `json:"knowledgeCardIds,omitempty"`
 	Context          string   `json:"context,omitempty"`
 	SessionID        string   `json:"sessionId,omitempty"`
+	CreateSession    bool     `json:"createSession,omitempty"`
 	Document         string   `json:"document,omitempty"`
 	Selection        string   `json:"selection,omitempty"`
 	Formality        int      `json:"formality,omitempty"`
@@ -137,6 +140,8 @@ type GenerateTextResponse struct {
 	KnowledgeCardID string `json:"knowledgeCardId,omitempty"`
 	Model           string `json:"model,omitempty"`
 	Tokens          int    `json:"tokens,omitempty"`
+	SessionID       string `json:"sessionId,omitempty"`
+	ReviewURL       string `json:"reviewUrl,omitempty"`
 }
 
 // WritingSession represents a writing session

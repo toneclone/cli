@@ -23,8 +23,10 @@ func (g *GenerateClient) Text(ctx context.Context, request *GenerateTextRequest)
 
 	// Use the standard client Post method for JSON response
 	var response struct {
-		Content string `json:"content"`
-		Done    bool   `json:"done"`
+		Content   string `json:"content"`
+		Done      bool   `json:"done"`
+		SessionID string `json:"sessionId"`
+		ReviewURL string `json:"reviewUrl"`
 	}
 
 	if err := g.client.Post(ctx, "/query", request, &response); err != nil {
@@ -36,6 +38,40 @@ func (g *GenerateClient) Text(ctx context.Context, request *GenerateTextRequest)
 		PersonaID:       request.PersonaID,
 		KnowledgeCardID: request.KnowledgeCardID,
 		Model:           request.Model,
+		SessionID:       response.SessionID,
+		ReviewURL:       response.ReviewURL,
+	}, nil
+}
+
+// Humanize runs a StyleGuard-only pass over the given text (no model generation,
+// no quota charge). Persona is optional; when provided, its StyleGuard config is
+// used. If createSession is true, the response carries a reviewUrl.
+func (g *GenerateClient) Humanize(ctx context.Context, text, personaID string, createSession bool) (*GenerateTextResponse, error) {
+	streaming := false
+	request := &GenerateTextRequest{
+		Mode:          "humanize",
+		Text:          text,
+		PersonaID:     personaID,
+		CreateSession: createSession,
+		Streaming:     &streaming,
+	}
+
+	var response struct {
+		Content   string `json:"content"`
+		Done      bool   `json:"done"`
+		SessionID string `json:"sessionId"`
+		ReviewURL string `json:"reviewUrl"`
+	}
+
+	if err := g.client.Post(ctx, "/query", request, &response); err != nil {
+		return nil, fmt.Errorf("failed to humanize text: %w", err)
+	}
+
+	return &GenerateTextResponse{
+		Text:      response.Content,
+		PersonaID: personaID,
+		SessionID: response.SessionID,
+		ReviewURL: response.ReviewURL,
 	}, nil
 }
 

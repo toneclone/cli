@@ -18,14 +18,14 @@ import (
 
 var (
 	// Write command flags
-	writePersona   string
-	writeKnowledge string
-	writePrompt    string
-	writeFile      string
-	writeOutput    string
-	writeVerbose   bool
-	writeTimeout   int
-	writeJson      bool
+	writePersona    string
+	writeKnowledge  string
+	writePrompt     string
+	writeFile       string
+	writeOutput     string
+	writeVerbose    bool
+	writeTimeout    int
+	writeReviewLink bool
 )
 
 // writeCmd represents the write command
@@ -72,7 +72,7 @@ func init() {
 	writeCmd.Flags().StringVar(&writeOutput, "output", "text", "output format: text, json")
 	writeCmd.Flags().BoolVar(&writeVerbose, "verbose", false, "show generation metadata and statistics")
 	writeCmd.Flags().IntVar(&writeTimeout, "timeout", 30, "request timeout in seconds")
-	writeCmd.Flags().BoolVar(&writeJson, "json", false, "output in JSON format (shorthand for --output json)")
+	writeCmd.Flags().BoolVar(&writeReviewLink, "review-link", false, "create a web review session and return a reviewUrl for the draft")
 
 	// Make persona required
 	writeCmd.MarkFlagRequired("persona")
@@ -163,6 +163,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		PersonaID:        persona.PersonaID,
 		KnowledgeCardID:  knowledgeCardID,
 		KnowledgeCardIDs: knowledgeCardIDs,
+		CreateSession:    writeReviewLink,
 	}
 
 	// Show generation info if verbose
@@ -199,7 +200,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output based on format
-	if writeJson || writeOutput == "json" {
+	if jsonOutput || writeOutput == "json" {
 		return outputWriteJSON(response, persona)
 	}
 
@@ -272,10 +273,17 @@ func outputWriteText(response *client.GenerateTextResponse, persona *client.Pers
 		fmt.Println()
 	}
 
+	// Share the review link (if any) on stderr so it doesn't pollute piped output.
+	if response.ReviewURL != "" {
+		fmt.Fprintf(os.Stderr, "\nReview/edit: %s\n", response.ReviewURL)
+	}
+
 	// Show metadata if verbose
 	if writeVerbose {
 		fmt.Fprintf(os.Stderr, "\n--- Generation Metadata ---\n")
-		fmt.Fprintf(os.Stderr, "Persona: %s (%s)\n", persona.Name, persona.PersonaID)
+		if persona != nil {
+			fmt.Fprintf(os.Stderr, "Persona: %s (%s)\n", persona.Name, persona.PersonaID)
+		}
 		if response.Model != "" {
 			fmt.Fprintf(os.Stderr, "Model: %s\n", response.Model)
 		}
@@ -290,10 +298,12 @@ func outputWriteText(response *client.GenerateTextResponse, persona *client.Pers
 func outputWriteJSON(response *client.GenerateTextResponse, persona *client.Persona) error {
 	output := map[string]interface{}{
 		"text": response.Text,
-		"persona": map[string]string{
+	}
+	if persona != nil {
+		output["persona"] = map[string]string{
 			"id":   persona.PersonaID,
 			"name": persona.Name,
-		},
+		}
 	}
 
 	if response.Model != "" {
@@ -304,6 +314,12 @@ func outputWriteJSON(response *client.GenerateTextResponse, persona *client.Pers
 	}
 	if response.KnowledgeCardID != "" {
 		output["knowledge_card_id"] = response.KnowledgeCardID
+	}
+	if response.ReviewURL != "" {
+		output["reviewUrl"] = response.ReviewURL
+	}
+	if response.SessionID != "" {
+		output["sessionId"] = response.SessionID
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
