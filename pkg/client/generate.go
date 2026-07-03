@@ -47,13 +47,10 @@ func (g *GenerateClient) Text(ctx context.Context, request *GenerateTextRequest)
 // no quota charge). Persona is optional; when provided, its StyleGuard config is
 // used. If createSession is true, the response carries a reviewUrl.
 func (g *GenerateClient) Humanize(ctx context.Context, text, personaID string, createSession bool) (*GenerateTextResponse, error) {
-	streaming := false
 	request := &GenerateTextRequest{
-		Mode:          "humanize",
 		Text:          text,
 		PersonaID:     personaID,
 		CreateSession: createSession,
-		Streaming:     &streaming,
 	}
 
 	var response struct {
@@ -63,7 +60,7 @@ func (g *GenerateClient) Humanize(ctx context.Context, text, personaID string, c
 		ReviewURL string `json:"reviewUrl"`
 	}
 
-	if err := g.client.Post(ctx, "/query", request, &response); err != nil {
+	if err := g.client.Post(ctx, "/query/humanize", request, &response); err != nil {
 		return nil, fmt.Errorf("failed to humanize text: %w", err)
 	}
 

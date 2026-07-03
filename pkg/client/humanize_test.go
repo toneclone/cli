@@ -9,9 +9,12 @@ import (
 	"testing"
 )
 
-func TestHumanizeSendsModeAndText(t *testing.T) {
+func TestHumanizePostsToDedicatedEndpointWithText(t *testing.T) {
 	var gotReq map[string]interface{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/query/humanize" {
+			t.Errorf("expected path /query/humanize, got %s", r.URL.Path)
+		}
 		body, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(body, &gotReq)
 		w.Header().Set("Content-Type", "application/json")
@@ -24,8 +27,8 @@ func TestHumanizeSendsModeAndText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotReq["mode"] != "humanize" {
-		t.Errorf("expected mode humanize, got %v", gotReq["mode"])
+	if _, ok := gotReq["mode"]; ok {
+		t.Errorf("did not expect mode in dedicated humanize request, got %v", gotReq["mode"])
 	}
 	if gotReq["text"] != "raw text" {
 		t.Errorf("expected text 'raw text', got %v", gotReq["text"])
