@@ -175,7 +175,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		return err
 	}
 	defer resp.Body.Close()
+	return handleResponse(resp, result)
+}
 
+func handleResponse(resp *http.Response, result interface{}) error {
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -244,6 +247,75 @@ func (c *Client) Get(ctx context.Context, path string, result interface{}) error
 // Post performs a POST request
 func (c *Client) Post(ctx context.Context, path string, body interface{}, result interface{}) error {
 	return c.doRequestWithRetry(ctx, "POST", path, body, result)
+}
+
+// PostMultipart performs a POST request with a caller-provided multipart body.
+func (c *Client) PostMultipart(ctx context.Context, path, contentType string, body []byte, result interface{}) error {
+	return c.doRawRequestWithRetry(ctx, http.MethodPost, path, contentType, body, result)
+}
+
+func (c *Client) makeRawRequest(ctx context.Context, method, path, contentType string, body []byte) (*http.Response, error) {
+	pathOnly, rawQuery, _ := strings.Cut(path, "?")
+	u, err := url.JoinPath(c.baseURL, pathOnly)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct URL: %w", err)
+	}
+	if rawQuery != "" {
+		u += "?" + rawQuery
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.devAuthKey != "" {
+		req.Header.Set("X-Dev-Auth", c.devAuthKey)
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("TC-API-Version", APIVersion)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	return resp, nil
+}
+
+func (c *Client) doRawRequest(ctx context.Context, method, path, contentType string, body []byte, result interface{}) error {
+	resp, err := c.makeRawRequest(ctx, method, path, contentType, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return handleResponse(resp, result)
+}
+
+func (c *Client) doRawRequestWithRetry(ctx context.Context, method, path, contentType string, body []byte, result interface{}) error {
+	maxRetries := 3
+	baseDelay := time.Second
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err := c.doRawRequest(ctx, method, path, contentType, body, result)
+		if rateLimitErr, ok := err.(*RateLimitError); ok {
+			if attempt == maxRetries-1 {
+				return rateLimitErr
+			}
+			delay := time.Duration(1<<attempt) * baseDelay
+			if rateLimitErr.RetryAfterSeconds > 0 {
+				delay = time.Duration(rateLimitErr.RetryAfterSeconds) * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				continue
+			}
+		}
+		return err
+	}
+	return fmt.Errorf("max retries exceeded")
 }
 
 // Put performs a PUT request

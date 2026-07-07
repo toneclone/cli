@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -16,17 +18,22 @@ import (
 	"github.com/toneclone/cli/pkg/client"
 )
 
+const maxKnowledgeSourceFileBytes = 10 * 1024 * 1024
+
 var (
 	// Knowledge command flags
-	knowledgeFormat       string
-	knowledgeSort         string
-	knowledgeFilter       string
-	knowledgeInteractive  bool
-	knowledgeName         string
-	knowledgeInstructions string
-	knowledgeAppend       string
-	knowledgeConfirm      bool
-	knowledgePersona      string
+	knowledgeFormat           string
+	knowledgeSort             string
+	knowledgeFilter           string
+	knowledgeInteractive      bool
+	knowledgeName             string
+	knowledgeInstructions     string
+	knowledgeInstructionsHint string
+	knowledgeAppend           string
+	knowledgeConfirm          bool
+	knowledgePersona          string
+	knowledgeURL              string
+	knowledgeFile             string
 )
 
 // knowledgeCmd represents the knowledge command
@@ -95,6 +102,39 @@ Examples:
   toneclone knowledge create --name="Blog Post" --instructions="Write engaging blog posts"
   toneclone knowledge create --interactive`,
 	RunE: runCreateKnowledgeCard,
+}
+
+var createKnowledgeCardFromURLCmd = &cobra.Command{
+	Use:   "create-from-url",
+	Short: "Create a knowledge card from a public URL",
+	Long: `Create a knowledge card by fetching a public HTTP(S) URL, extracting text,
+and synthesizing concise editable instructions. The backend rejects private/local
+hosts and unsupported or oversized responses.
+
+Examples:
+  toneclone knowledge create-from-url --url=https://example.com/docs --json
+  toneclone knowledge create-from-url --url=https://example.com/docs --instructions-hint="Focus on pricing and limits"`,
+	RunE: runCreateKnowledgeCardFromURL,
+}
+
+var createKnowledgeCardFromFileCmd = &cobra.Command{
+	Use:   "create-from-file",
+	Short: "Create a knowledge card from a local file",
+	Long: `Create a knowledge card by uploading a local source file for immediate text
+extraction and synthesis. Supported backend formats include text, Markdown, PDF,
+DOCX/DOC, HTML, CSV, JSON, and XML, up to 10MB.
+
+Examples:
+  toneclone knowledge create-from-file --file=product-faq.md --json
+  toneclone knowledge create-from-file --file=pricing.pdf --instructions-hint="Extract durable facts"`,
+	RunE: runCreateKnowledgeCardFromFile,
+}
+
+var knowledgeSourcesCmd = &cobra.Command{
+	Use:   "sources <knowledge-card-name-or-id>",
+	Short: "List source metadata for a knowledge card",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runKnowledgeSources,
 }
 
 // updateKnowledgeCardCmd represents the update subcommand
@@ -166,8 +206,11 @@ func init() {
 	knowledgeCmd.AddCommand(listKnowledgeCmd)
 	knowledgeCmd.AddCommand(getKnowledgeCardCmd)
 	knowledgeCmd.AddCommand(createKnowledgeCardCmd)
+	knowledgeCmd.AddCommand(createKnowledgeCardFromURLCmd)
+	knowledgeCmd.AddCommand(createKnowledgeCardFromFileCmd)
 	knowledgeCmd.AddCommand(updateKnowledgeCardCmd)
 	knowledgeCmd.AddCommand(deleteKnowledgeCardCmd)
+	knowledgeCmd.AddCommand(knowledgeSourcesCmd)
 	knowledgeCmd.AddCommand(associateKnowledgeCmd)
 	knowledgeCmd.AddCommand(disassociateKnowledgeCmd)
 
@@ -184,6 +227,19 @@ func init() {
 	createKnowledgeCardCmd.Flags().StringVar(&knowledgeInstructions, "instructions", "", "knowledge card instructions")
 	createKnowledgeCardCmd.Flags().BoolVar(&knowledgeInteractive, "interactive", false, "interactive knowledge card creation")
 	createKnowledgeCardCmd.Flags().StringVar(&knowledgeFormat, "format", "table", "output format: table, json")
+
+	// Source-backed create flags
+	createKnowledgeCardFromURLCmd.Flags().StringVar(&knowledgeURL, "url", "", "public HTTP(S) URL to ingest")
+	createKnowledgeCardFromURLCmd.Flags().StringVar(&knowledgeInstructionsHint, "instructions-hint", "", "optional synthesis guidance for the source")
+	createKnowledgeCardFromURLCmd.Flags().StringVar(&knowledgeFormat, "format", "table", "output format: table, json")
+	createKnowledgeCardFromURLCmd.MarkFlagRequired("url")
+
+	createKnowledgeCardFromFileCmd.Flags().StringVar(&knowledgeFile, "file", "", "local file to ingest")
+	createKnowledgeCardFromFileCmd.Flags().StringVar(&knowledgeInstructionsHint, "instructions-hint", "", "optional synthesis guidance for the source")
+	createKnowledgeCardFromFileCmd.Flags().StringVar(&knowledgeFormat, "format", "table", "output format: table, json")
+	createKnowledgeCardFromFileCmd.MarkFlagRequired("file")
+
+	knowledgeSourcesCmd.Flags().StringVar(&knowledgeFormat, "format", "table", "output format: table, json")
 
 	// Update command flags
 	updateKnowledgeCardCmd.Flags().StringVar(&knowledgeName, "name", "", "new knowledge card name")
@@ -332,11 +388,51 @@ func runCreateKnowledgeCard(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create knowledge card: %w", err)
 	}
 
-	fmt.Printf("✓ Knowledge card '%s' created successfully\n", created.Name)
-	fmt.Printf("  ID: %s\n", created.KnowledgeCardID)
-	fmt.Printf("  Instructions: %s\n", created.Instructions)
+	return outputKnowledgeCardCreated(created)
+}
 
-	return nil
+func runCreateKnowledgeCardFromURL(cmd *cobra.Command, args []string) error {
+	if err := validateKnowledgeSourceURL(knowledgeURL); err != nil {
+		return err
+	}
+	apiClient, err := newAPIClient(30)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	response, err := apiClient.Knowledge.CreateFromURL(ctx, knowledgeURL, knowledgeInstructionsHint)
+	if err != nil {
+		return err
+	}
+	return outputKnowledgeIngestResponse(response)
+}
+
+func runCreateKnowledgeCardFromFile(cmd *cobra.Command, args []string) error {
+	apiClient, err := newAPIClient(30)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(knowledgeFile)
+	if err != nil {
+		return fmt.Errorf("failed to stat source file %s: %w", knowledgeFile, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("source file must be a regular file")
+	}
+	if info.Size() > maxKnowledgeSourceFileBytes {
+		return fmt.Errorf("source file is too large: maximum size is 10MB")
+	}
+	file, err := os.Open(knowledgeFile)
+	if err != nil {
+		return fmt.Errorf("failed to open source file %s: %w", knowledgeFile, err)
+	}
+	defer file.Close()
+	ctx := cmd.Context()
+	response, err := apiClient.Knowledge.CreateFromFile(ctx, knowledgeFile, file, knowledgeInstructionsHint)
+	if err != nil {
+		return err
+	}
+	return outputKnowledgeIngestResponse(response)
 }
 
 func runUpdateKnowledgeCard(cmd *cobra.Command, args []string) error {
@@ -371,7 +467,7 @@ func runUpdateKnowledgeCard(cmd *cobra.Command, args []string) error {
 		30*time.Second,
 	)
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	// Validate and get existing knowledge card by ID or name
 	existing, err := validateKnowledgeCard(ctx, apiClient, knowledgeInput)
@@ -396,11 +492,24 @@ func runUpdateKnowledgeCard(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to update knowledge card: %w", err)
 	}
 
-	fmt.Printf("✓ Knowledge card updated successfully\n")
-	fmt.Printf("  Name: %s\n", updated.Name)
-	fmt.Printf("  Instructions: %s\n", updated.Instructions)
+	return outputKnowledgeCardUpdated(updated)
+}
 
-	return nil
+func runKnowledgeSources(cmd *cobra.Command, args []string) error {
+	apiClient, err := newAPIClient(30)
+	if err != nil {
+		return err
+	}
+	ctx := cmd.Context()
+	knowledgeCard, err := validateKnowledgeCard(ctx, apiClient, args[0])
+	if err != nil {
+		return fmt.Errorf("knowledge card validation failed: %w", err)
+	}
+	sources, err := apiClient.Knowledge.Sources(ctx, knowledgeCard.KnowledgeCardID)
+	if err != nil {
+		return err
+	}
+	return outputKnowledgeSources(sources)
 }
 
 func runDeleteKnowledgeCard(cmd *cobra.Command, args []string) error {
@@ -605,11 +714,7 @@ func runInteractiveKnowledgeCardCreation() error {
 		return fmt.Errorf("failed to create knowledge card: %w", err)
 	}
 
-	fmt.Printf("\n✓ Knowledge card '%s' created successfully\n", created.Name)
-	fmt.Printf("  ID: %s\n", created.KnowledgeCardID)
-	fmt.Printf("  Instructions: %s\n", created.Instructions)
-
-	return nil
+	return outputKnowledgeCardCreated(created)
 }
 
 func filterKnowledge(knowledge []client.KnowledgeCard, filter string) []client.KnowledgeCard {
@@ -711,4 +816,176 @@ func outputKnowledgeCardJSON(knowledgeCard *client.KnowledgeCard) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(knowledgeCard)
+}
+
+func outputKnowledgeCardCreated(knowledgeCard *client.KnowledgeCard) error {
+	if wantsJSONFormat(knowledgeFormat) {
+		return outputKnowledgeCardJSON(knowledgeCard)
+	}
+	fmt.Printf("✓ Knowledge card '%s' created successfully\n", knowledgeCard.Name)
+	fmt.Printf("  ID: %s\n", knowledgeCard.KnowledgeCardID)
+	fmt.Printf("  Instructions: %s\n", knowledgeCard.Instructions)
+	return nil
+}
+
+func outputKnowledgeCardUpdated(knowledgeCard *client.KnowledgeCard) error {
+	if wantsJSONFormat(knowledgeFormat) {
+		return outputKnowledgeCardJSON(knowledgeCard)
+	}
+	fmt.Printf("✓ Knowledge card updated successfully\n")
+	fmt.Printf("  Name: %s\n", knowledgeCard.Name)
+	fmt.Printf("  Instructions: %s\n", knowledgeCard.Instructions)
+	return nil
+}
+
+func outputKnowledgeIngestResponse(response *client.KnowledgeCardIngestResponse) error {
+	if wantsJSONFormat(knowledgeFormat) {
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(sanitizeKnowledgeIngestResponse(response))
+	}
+	fmt.Printf("✓ Knowledge card '%s' created successfully\n", response.KnowledgeCard.Name)
+	fmt.Printf("  ID: %s\n", response.KnowledgeCard.KnowledgeCardID)
+	fmt.Printf("  Source: %s", response.Source.Type)
+	if response.Source.URL != "" {
+		fmt.Printf(" %s", sanitizeURLForOutput(response.Source.URL))
+	} else if response.Source.Filename != "" {
+		fmt.Printf(" %s", response.Source.Filename)
+	} else if response.Source.DisplayName != "" {
+		fmt.Printf(" %s", response.Source.DisplayName)
+	}
+	fmt.Println()
+	if response.Source.ExtractedCharCount > 0 {
+		fmt.Printf("  Extracted: %d chars\n", response.Source.ExtractedCharCount)
+	}
+	if response.Synthesis.Summary != "" {
+		fmt.Printf("\nSummary:\n%s\n", response.Synthesis.Summary)
+	}
+	if len(response.Synthesis.KeyFacts) > 0 {
+		fmt.Println("\nKey facts:")
+		for _, fact := range response.Synthesis.KeyFacts {
+			fmt.Printf("- %s\n", fact)
+		}
+	}
+	if len(response.Synthesis.UsageNotes) > 0 {
+		fmt.Println("\nUsage notes:")
+		for _, note := range response.Synthesis.UsageNotes {
+			fmt.Printf("- %s\n", note)
+		}
+	}
+	if len(response.Synthesis.Warnings) > 0 {
+		fmt.Println("\nWarnings:")
+		for _, warning := range response.Synthesis.Warnings {
+			fmt.Printf("- %s\n", warning)
+		}
+	}
+	return nil
+}
+
+func outputKnowledgeSources(sources []client.KnowledgeCardSource) error {
+	if wantsJSONFormat(knowledgeFormat) {
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		sanitized := sanitizeKnowledgeSources(sources)
+		return encoder.Encode(map[string]interface{}{"sources": sanitized, "count": len(sanitized)})
+	}
+	if len(sources) == 0 {
+		fmt.Println("No source metadata found.")
+		return nil
+	}
+	for _, source := range sources {
+		fmt.Printf("Source: %s — %s\n", source.Type, source.DisplayName)
+		fmt.Printf("Status: %s\n", source.Status)
+		if source.URL != "" {
+			fmt.Printf("URL: %s\n", sanitizeURLForOutput(source.URL))
+		}
+		if source.Filename != "" {
+			fmt.Printf("File: %s\n", source.Filename)
+		}
+		if source.ExtractedCharCount > 0 {
+			fmt.Printf("Extracted: %d chars\n", source.ExtractedCharCount)
+		}
+		if source.ExtractedTextPreview != "" {
+			fmt.Printf("Preview:\n%s\n", source.ExtractedTextPreview)
+		}
+		fmt.Println()
+	}
+	return nil
+}
+
+func validateKnowledgeSourceURL(raw string) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed == nil || parsed.Hostname() == "" {
+		return fmt.Errorf("invalid URL")
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("URLs with embedded credentials are not allowed")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("URL must use http or https")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return fmt.Errorf("localhost URLs are not allowed")
+	}
+	if ip, err := netip.ParseAddr(host); err == nil && !isPublicKnowledgeSourceIP(ip) {
+		return fmt.Errorf("private or local IP URLs are not allowed")
+	}
+	return nil
+}
+
+func isPublicKnowledgeSourceIP(ip netip.Addr) bool {
+	if !ip.IsValid() {
+		return false
+	}
+	ip = ip.Unmap()
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return false
+	}
+	return true
+}
+
+func sanitizeURLForOutput(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil {
+		return "[redacted-url]"
+	}
+	parsed.User = nil
+	query := parsed.Query()
+	for key := range query {
+		if isSensitiveURLParam(key) {
+			query.Set(key, "[REDACTED]")
+		}
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+func isSensitiveURLParam(key string) bool {
+	k := strings.ToLower(key)
+	return strings.Contains(k, "token") || strings.Contains(k, "secret") || strings.Contains(k, "key") || strings.Contains(k, "signature") || strings.Contains(k, "password") || strings.Contains(k, "credential") || k == "sig"
+}
+
+func sanitizeKnowledgeIngestResponse(response *client.KnowledgeCardIngestResponse) *client.KnowledgeCardIngestResponse {
+	if response == nil {
+		return nil
+	}
+	copy := *response
+	copy.Source = sanitizeKnowledgeSource(copy.Source)
+	return &copy
+}
+
+func sanitizeKnowledgeSources(sources []client.KnowledgeCardSource) []client.KnowledgeCardSource {
+	sanitized := make([]client.KnowledgeCardSource, len(sources))
+	for i, source := range sources {
+		sanitized[i] = sanitizeKnowledgeSource(source)
+	}
+	return sanitized
+}
+
+func sanitizeKnowledgeSource(source client.KnowledgeCardSource) client.KnowledgeCardSource {
+	if source.URL != "" {
+		source.URL = sanitizeURLForOutput(source.URL)
+	}
+	return source
 }
