@@ -296,25 +296,9 @@ func (c *Client) doRawRequest(ctx context.Context, method, path, contentType str
 }
 
 func (c *Client) doRawRequestWithRetry(ctx context.Context, method, path, contentType string, body []byte, result interface{}) error {
-	maxRetries := 3
-	baseDelay := time.Second
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		err := c.doRawRequest(ctx, method, path, contentType, body, result)
-		if rateLimitErr, ok := err.(*RateLimitError); ok {
-			if attempt == maxRetries-1 {
-				return rateLimitErr
-			}
-			delay := retryDelay(rateLimitErr, attempt, baseDelay)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-				continue
-			}
-		}
-		return err
-	}
-	return fmt.Errorf("max retries exceeded")
+	return withRateLimitRetry(ctx, func() error {
+		return c.doRawRequest(ctx, method, path, contentType, body, result)
+	})
 }
 
 // Put performs a PUT request
@@ -385,11 +369,17 @@ func (c *Client) WithContext(ctx context.Context) context.Context {
 
 // doRequestWithRetry performs a request with automatic retry for rate limits
 func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
+	return withRateLimitRetry(ctx, func() error {
+		return c.doRequest(ctx, method, endpoint, body, result)
+	})
+}
+
+func withRateLimitRetry(ctx context.Context, do func() error) error {
 	maxRetries := 3
 	baseDelay := time.Second
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		err := c.doRequest(ctx, method, endpoint, body, result)
+		err := do()
 
 		// Check if it's a rate limit error
 		if rateLimitErr, ok := err.(*RateLimitError); ok {

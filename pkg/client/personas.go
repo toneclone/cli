@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/url"
 )
 
 // PersonasClient handles persona-related API operations
@@ -38,7 +39,7 @@ func (p *PersonasClient) ListBuiltIn(ctx context.Context) ([]Persona, error) {
 // Get retrieves a specific persona by ID
 func (p *PersonasClient) Get(ctx context.Context, personaID string) (*Persona, error) {
 	var persona Persona
-	err := p.client.Get(ctx, fmt.Sprintf("/personas/%s", personaID), &persona)
+	err := p.client.Get(ctx, fmt.Sprintf("/personas/%s", url.PathEscape(personaID)), &persona)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get persona %s: %w", personaID, err)
 	}
@@ -58,7 +59,7 @@ func (p *PersonasClient) Create(ctx context.Context, persona *Persona) (*Persona
 // Update updates an existing persona
 func (p *PersonasClient) Update(ctx context.Context, personaID string, persona *Persona) (*Persona, error) {
 	var result Persona
-	err := p.client.Put(ctx, fmt.Sprintf("/personas/%s", personaID), persona, &result)
+	err := p.client.Put(ctx, fmt.Sprintf("/personas/%s", url.PathEscape(personaID)), persona, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update persona %s: %w", personaID, err)
 	}
@@ -67,7 +68,7 @@ func (p *PersonasClient) Update(ctx context.Context, personaID string, persona *
 
 // Delete deletes a persona
 func (p *PersonasClient) Delete(ctx context.Context, personaID string) error {
-	err := p.client.Delete(ctx, fmt.Sprintf("/personas/%s", personaID))
+	err := p.client.Delete(ctx, fmt.Sprintf("/personas/%s", url.PathEscape(personaID)))
 	if err != nil {
 		return fmt.Errorf("failed to delete persona %s: %w", personaID, err)
 	}
@@ -77,7 +78,7 @@ func (p *PersonasClient) Delete(ctx context.Context, personaID string) error {
 // ListFiles retrieves files associated with a persona
 func (p *PersonasClient) ListFiles(ctx context.Context, personaID string) ([]TrainingFile, error) {
 	var response TrainingFileListResponse
-	err := p.client.Get(ctx, fmt.Sprintf("/personas/%s/files", personaID), &response)
+	err := p.client.Get(ctx, fmt.Sprintf("/personas/%s/files", url.PathEscape(personaID)), &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list files for persona %s: %w", personaID, err)
 	}
@@ -89,7 +90,7 @@ func (p *PersonasClient) AssociateFiles(ctx context.Context, personaID string, f
 	body := map[string]interface{}{
 		"fileIds": fileIDs,
 	}
-	err := p.client.Post(ctx, fmt.Sprintf("/personas/%s/files", personaID), body, nil)
+	err := p.client.Post(ctx, fmt.Sprintf("/personas/%s/files", url.PathEscape(personaID)), body, nil)
 	if err != nil {
 		return fmt.Errorf("failed to associate files with persona %s: %w", personaID, err)
 	}
@@ -101,7 +102,7 @@ func (p *PersonasClient) DisassociateFiles(ctx context.Context, personaID string
 	body := map[string]interface{}{
 		"fileIds": fileIDs,
 	}
-	err := p.client.doRequest(ctx, "DELETE", fmt.Sprintf("/personas/%s/files", personaID), body, nil)
+	err := p.client.doRequest(ctx, "DELETE", fmt.Sprintf("/personas/%s/files", url.PathEscape(personaID)), body, nil)
 	if err != nil {
 		return fmt.Errorf("failed to disassociate files from persona %s: %w", personaID, err)
 	}

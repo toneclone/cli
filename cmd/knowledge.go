@@ -20,6 +20,30 @@ import (
 
 const maxKnowledgeSourceFileBytes = 10 * 1024 * 1024
 
+var specialUseKnowledgeSourcePrefixes = []netip.Prefix{
+	mustKnowledgeSourcePrefix("0.0.0.0/8"),
+	mustKnowledgeSourcePrefix("100.64.0.0/10"),
+	mustKnowledgeSourcePrefix("127.0.0.0/8"),
+	mustKnowledgeSourcePrefix("169.254.0.0/16"),
+	mustKnowledgeSourcePrefix("192.0.0.0/24"),
+	mustKnowledgeSourcePrefix("192.0.2.0/24"),
+	mustKnowledgeSourcePrefix("198.18.0.0/15"),
+	mustKnowledgeSourcePrefix("198.51.100.0/24"),
+	mustKnowledgeSourcePrefix("203.0.113.0/24"),
+	mustKnowledgeSourcePrefix("224.0.0.0/4"),
+	mustKnowledgeSourcePrefix("240.0.0.0/4"),
+	mustKnowledgeSourcePrefix("::/128"),
+	mustKnowledgeSourcePrefix("::1/128"),
+	mustKnowledgeSourcePrefix("64:ff9b:1::/48"),
+	mustKnowledgeSourcePrefix("100::/64"),
+	mustKnowledgeSourcePrefix("2001::/23"),
+	mustKnowledgeSourcePrefix("2001:2::/48"),
+	mustKnowledgeSourcePrefix("2001:db8::/32"),
+	mustKnowledgeSourcePrefix("fc00::/7"),
+	mustKnowledgeSourcePrefix("fe80::/10"),
+	mustKnowledgeSourcePrefix("ff00::/8"),
+}
+
 var (
 	// Knowledge command flags
 	knowledgeFormat           string
@@ -545,7 +569,10 @@ func runDeleteKnowledgeCard(cmd *cobra.Command, args []string) error {
 
 	// Confirm deletion
 	if !knowledgeConfirm {
-		fmt.Printf("Are you sure you want to delete knowledge card '%s' (%s)? [y/N]: ", knowledgeCard.Name, knowledgeCard.KnowledgeCardID)
+		if wantsJSONFormat(knowledgeFormat) {
+			return fmt.Errorf("--confirm is required when deleting with --json")
+		}
+		fmt.Printf("Are you sure you want to delete knowledge card '%s' (%s)? [y/N]: ", terminalSafe(knowledgeCard.Name), knowledgeCard.KnowledgeCardID)
 		var response string
 		fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
@@ -560,7 +587,10 @@ func runDeleteKnowledgeCard(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to delete knowledge card: %w", err)
 	}
 
-	fmt.Printf("✓ Knowledge card '%s' deleted successfully\n", knowledgeCard.Name)
+	if wantsJSONFormat(knowledgeFormat) {
+		return writeJSON(map[string]interface{}{"deleted": true, "knowledgeCard": knowledgeCard})
+	}
+	fmt.Printf("✓ Knowledge card '%s' deleted successfully\n", terminalSafe(knowledgeCard.Name))
 	return nil
 }
 
@@ -604,7 +634,10 @@ func runAssociateKnowledgeCard(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to associate knowledge card: %w", err)
 	}
 
-	fmt.Printf("✓ Knowledge card '%s' associated with persona '%s'\n", knowledgeName, persona.Name)
+	if wantsJSONFormat(knowledgeFormat) {
+		return writeJSON(map[string]interface{}{"associated": true, "knowledgeCard": knowledgeCard, "persona": persona})
+	}
+	fmt.Printf("✓ Knowledge card '%s' associated with persona '%s'\n", terminalSafe(knowledgeName), terminalSafe(persona.Name))
 	return nil
 }
 
@@ -648,7 +681,10 @@ func runDisassociateKnowledgeCard(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to disassociate knowledge card: %w", err)
 	}
 
-	fmt.Printf("✓ Knowledge card '%s' disassociated from persona '%s'\n", knowledgeName, persona.Name)
+	if wantsJSONFormat(knowledgeFormat) {
+		return writeJSON(map[string]interface{}{"disassociated": true, "knowledgeCard": knowledgeCard, "persona": persona})
+	}
+	fmt.Printf("✓ Knowledge card '%s' disassociated from persona '%s'\n", terminalSafe(knowledgeName), terminalSafe(persona.Name))
 	return nil
 }
 
@@ -814,18 +850,16 @@ func outputKnowledgeCardDetails(knowledgeCard *client.KnowledgeCard) error {
 }
 
 func outputKnowledgeCardJSON(knowledgeCard *client.KnowledgeCard) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(knowledgeCard)
+	return writeJSON(knowledgeCard)
 }
 
 func outputKnowledgeCardCreated(knowledgeCard *client.KnowledgeCard) error {
 	if wantsJSONFormat(knowledgeFormat) {
 		return outputKnowledgeCardJSON(knowledgeCard)
 	}
-	fmt.Printf("✓ Knowledge card '%s' created successfully\n", knowledgeCard.Name)
+	fmt.Printf("✓ Knowledge card '%s' created successfully\n", terminalSafe(knowledgeCard.Name))
 	fmt.Printf("  ID: %s\n", knowledgeCard.KnowledgeCardID)
-	fmt.Printf("  Instructions: %s\n", knowledgeCard.Instructions)
+	fmt.Printf("  Instructions: %s\n", terminalSafe(knowledgeCard.Instructions))
 	return nil
 }
 
@@ -834,16 +868,14 @@ func outputKnowledgeCardUpdated(knowledgeCard *client.KnowledgeCard) error {
 		return outputKnowledgeCardJSON(knowledgeCard)
 	}
 	fmt.Printf("✓ Knowledge card updated successfully\n")
-	fmt.Printf("  Name: %s\n", knowledgeCard.Name)
-	fmt.Printf("  Instructions: %s\n", knowledgeCard.Instructions)
+	fmt.Printf("  Name: %s\n", terminalSafe(knowledgeCard.Name))
+	fmt.Printf("  Instructions: %s\n", terminalSafe(knowledgeCard.Instructions))
 	return nil
 }
 
 func outputKnowledgeIngestResponse(response *client.KnowledgeCardIngestResponse) error {
 	if wantsJSONFormat(knowledgeFormat) {
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(sanitizeKnowledgeIngestResponse(response))
+		return writeJSON(sanitizeKnowledgeIngestResponse(response))
 	}
 	fmt.Printf("✓ Knowledge card '%s' created successfully\n", terminalSafe(response.KnowledgeCard.Name))
 	fmt.Printf("  ID: %s\n", response.KnowledgeCard.KnowledgeCardID)
@@ -885,10 +917,8 @@ func outputKnowledgeIngestResponse(response *client.KnowledgeCardIngestResponse)
 
 func outputKnowledgeSources(sources []client.KnowledgeCardSource) error {
 	if wantsJSONFormat(knowledgeFormat) {
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
 		sanitized := sanitizeKnowledgeSources(sources)
-		return encoder.Encode(map[string]interface{}{"sources": sanitized, "count": len(sanitized)})
+		return writeJSON(map[string]interface{}{"sources": sanitized, "count": len(sanitized)})
 	}
 	if len(sources) == 0 {
 		fmt.Println("No source metadata found.")
@@ -951,7 +981,20 @@ func isPublicKnowledgeSourceIP(ip netip.Addr) bool {
 	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
 		return false
 	}
+	for _, prefix := range specialUseKnowledgeSourcePrefixes {
+		if prefix.Contains(ip) {
+			return false
+		}
+	}
 	return true
+}
+
+func mustKnowledgeSourcePrefix(raw string) netip.Prefix {
+	prefix, err := netip.ParsePrefix(raw)
+	if err != nil {
+		panic(err)
+	}
+	return prefix
 }
 
 func sanitizeURLForOutput(raw string) string {
@@ -960,6 +1003,7 @@ func sanitizeURLForOutput(raw string) string {
 		return "[redacted-url]"
 	}
 	parsed.User = nil
+	parsed.Fragment = ""
 	query := parsed.Query()
 	for key := range query {
 		if isSensitiveURLParam(key) {
@@ -1010,4 +1054,10 @@ func terminalSafe(value string) string {
 		}
 		return r
 	}, value)
+}
+
+func writeJSON(value interface{}) error {
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(value)
 }

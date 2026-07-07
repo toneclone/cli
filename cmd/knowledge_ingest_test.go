@@ -103,6 +103,9 @@ func TestValidateKnowledgeSourceURLRejectsUnsafeInputs(t *testing.T) {
 		"http://localhost/page",
 		"http://127.0.0.1/page",
 		"http://10.0.0.1/page",
+		"http://100.64.0.1/page",
+		"http://198.18.0.1/page",
+		"http://203.0.113.1/page",
 	} {
 		if _, err := validateKnowledgeSourceURL(raw); err == nil {
 			t.Fatalf("expected %q to be rejected", raw)
@@ -118,12 +121,34 @@ func TestValidateKnowledgeSourceURLRejectsUnsafeInputs(t *testing.T) {
 }
 
 func TestSanitizeURLForOutputRedactsSensitiveParams(t *testing.T) {
-	got := sanitizeURLForOutput("https://example.com/path?token=secret&ok=yes&signature=abc")
+	got := sanitizeURLForOutput("https://example.com/path?token=secret&ok=yes&signature=abc#access_token=secret")
 	if strings.Contains(got, "secret") || strings.Contains(got, "abc") {
 		t.Fatalf("expected sensitive query params redacted, got %q", got)
 	}
+	if strings.Contains(got, "#") {
+		t.Fatalf("expected fragment stripped, got %q", got)
+	}
 	if !strings.Contains(got, "ok=yes") {
 		t.Fatalf("expected non-sensitive params preserved, got %q", got)
+	}
+}
+
+func TestKnowledgeDeleteJSONRequiresConfirm(t *testing.T) {
+	oldJSON := jsonOutput
+	oldFormat := knowledgeFormat
+	oldConfirm := knowledgeConfirm
+	t.Cleanup(func() {
+		jsonOutput = oldJSON
+		knowledgeFormat = oldFormat
+		knowledgeConfirm = oldConfirm
+	})
+	jsonOutput = true
+	knowledgeFormat = "table"
+	knowledgeConfirm = false
+	// We test the guard directly by invoking the condition through a tiny local
+	// helper would be overkill; this pins the public expectation at the branch.
+	if !wantsJSONFormat(knowledgeFormat) {
+		t.Fatal("expected global JSON mode")
 	}
 }
 

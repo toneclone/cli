@@ -149,3 +149,47 @@ func TestKnowledgeResourceMethodsEscapePathIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestPersonaResourceMethodsEscapePathIDs(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.EscapedPath())
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodGet:
+			if strings.HasSuffix(r.URL.EscapedPath(), "/files") {
+				w.Write([]byte(`{"files":[]}`))
+			} else {
+				w.Write([]byte(`{"personaId":"persona/1","name":"n"}`))
+			}
+		case http.MethodPut:
+			w.Write([]byte(`{"personaId":"persona/1","name":"n"}`))
+		case http.MethodPost, http.MethodDelete:
+			w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	tc := NewToneCloneClientFromConfig(server.URL, "test_key", 0)
+	ctx := context.Background()
+	_, _ = tc.Personas.Get(ctx, "persona/1")
+	_, _ = tc.Personas.Update(ctx, "persona/1", &Persona{Name: "n"})
+	_ = tc.Personas.Delete(ctx, "persona/1")
+	_, _ = tc.Personas.ListFiles(ctx, "persona/1")
+	_ = tc.Personas.AssociateFiles(ctx, "persona/1", []string{"file/1"})
+	_ = tc.Personas.DisassociateFiles(ctx, "persona/1", []string{"file/1"})
+
+	want := []string{
+		"GET /personas/persona%2F1",
+		"PUT /personas/persona%2F1",
+		"DELETE /personas/persona%2F1",
+		"GET /personas/persona%2F1/files",
+		"POST /personas/persona%2F1/files",
+		"DELETE /personas/persona%2F1/files",
+	}
+	for i, expected := range want {
+		if i >= len(paths) || paths[i] != expected {
+			t.Fatalf("path %d = %q, want %q (all paths: %v)", i, paths[i], expected, paths)
+		}
+	}
+}
