@@ -122,15 +122,9 @@ func (e ErrorResponse) Error() string {
 
 // makeRequest performs an HTTP request to the API
 func (c *Client) makeRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
-	// Construct URL. url.JoinPath treats '?' as path data, so split query
-	// strings supplied by resource clients before joining the URL path.
-	pathOnly, rawQuery, _ := strings.Cut(path, "?")
-	u, err := url.JoinPath(c.baseURL, pathOnly)
+	u, err := c.requestURL(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct URL: %w", err)
-	}
-	if rawQuery != "" {
-		u += "?" + rawQuery
 	}
 
 	// Prepare request body
@@ -149,15 +143,7 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body inte
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	if c.devAuthKey != "" {
-		req.Header.Set("X-Dev-Auth", c.devAuthKey)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("TC-API-Version", APIVersion)
+	c.applyCommonHeaders(req, "application/json")
 
 	// Perform request
 	resp, err := c.httpClient.Do(req)
@@ -166,6 +152,33 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body inte
 	}
 
 	return resp, nil
+}
+
+func (c *Client) requestURL(path string) (string, error) {
+	// url.JoinPath treats '?' as path data, so split query strings supplied by
+	// resource clients before joining the URL path.
+	pathOnly, rawQuery, _ := strings.Cut(path, "?")
+	u, err := url.JoinPath(c.baseURL, pathOnly)
+	if err != nil {
+		return "", err
+	}
+	if rawQuery != "" {
+		u += "?" + rawQuery
+	}
+	return u, nil
+}
+
+func (c *Client) applyCommonHeaders(req *http.Request, contentType string) {
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.devAuthKey != "" {
+		req.Header.Set("X-Dev-Auth", c.devAuthKey)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("TC-API-Version", APIVersion)
 }
 
 // doRequest performs a request and handles the response
@@ -255,27 +268,16 @@ func (c *Client) PostMultipart(ctx context.Context, path, contentType string, bo
 }
 
 func (c *Client) makeRawRequest(ctx context.Context, method, path, contentType string, body []byte) (*http.Response, error) {
-	pathOnly, rawQuery, _ := strings.Cut(path, "?")
-	u, err := url.JoinPath(c.baseURL, pathOnly)
+	u, err := c.requestURL(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct URL: %w", err)
-	}
-	if rawQuery != "" {
-		u += "?" + rawQuery
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	if c.devAuthKey != "" {
-		req.Header.Set("X-Dev-Auth", c.devAuthKey)
-	}
-	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("TC-API-Version", APIVersion)
+	c.applyCommonHeaders(req, contentType)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -302,10 +304,7 @@ func (c *Client) doRawRequestWithRetry(ctx context.Context, method, path, conten
 			if attempt == maxRetries-1 {
 				return rateLimitErr
 			}
-			delay := time.Duration(1<<attempt) * baseDelay
-			if rateLimitErr.RetryAfterSeconds > 0 {
-				delay = time.Duration(rateLimitErr.RetryAfterSeconds) * time.Second
-			}
+			delay := retryDelay(rateLimitErr, attempt, baseDelay)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -399,19 +398,7 @@ func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string
 				return rateLimitErr
 			}
 
-			// Calculate delay - prefer Retry-After header, fallback to exponential backoff
-			var delay time.Duration
-			if rateLimitErr.RetryAfterSeconds > 0 {
-				delay = time.Duration(rateLimitErr.RetryAfterSeconds) * time.Second
-			} else {
-				// Exponential backoff: 1s, 2s, 4s...
-				delay = baseDelay * time.Duration(1<<attempt)
-			}
-
-			// Don't wait longer than 60 seconds
-			if delay > 60*time.Second {
-				delay = 60 * time.Second
-			}
+			delay := retryDelay(rateLimitErr, attempt, baseDelay)
 
 			// Wait before retrying
 			select {
@@ -427,4 +414,15 @@ func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string
 	}
 
 	return fmt.Errorf("max retries exceeded")
+}
+
+func retryDelay(rateLimitErr *RateLimitError, attempt int, baseDelay time.Duration) time.Duration {
+	delay := baseDelay * time.Duration(1<<attempt)
+	if rateLimitErr != nil && rateLimitErr.RetryAfterSeconds > 0 {
+		delay = time.Duration(rateLimitErr.RetryAfterSeconds) * time.Second
+	}
+	if delay > 60*time.Second {
+		return 60 * time.Second
+	}
+	return delay
 }

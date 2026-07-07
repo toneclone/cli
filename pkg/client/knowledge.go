@@ -151,7 +151,7 @@ func (k *KnowledgeClient) Sources(ctx context.Context, knowledgeCardID string) (
 // Update updates an existing knowledge card
 func (k *KnowledgeClient) Update(ctx context.Context, knowledgeCardID string, knowledge *KnowledgeCard) (*KnowledgeCard, error) {
 	var result KnowledgeCard
-	err := k.client.Put(ctx, fmt.Sprintf("/knowledge/%s", knowledgeCardID), knowledge, &result)
+	err := k.client.Put(ctx, fmt.Sprintf("/knowledge/%s", url.PathEscape(knowledgeCardID)), knowledge, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update knowledge card %s: %w", knowledgeCardID, err)
 	}
@@ -160,7 +160,7 @@ func (k *KnowledgeClient) Update(ctx context.Context, knowledgeCardID string, kn
 
 // Delete deletes a knowledge card
 func (k *KnowledgeClient) Delete(ctx context.Context, knowledgeCardID string) error {
-	err := k.client.Delete(ctx, fmt.Sprintf("/knowledge/%s", knowledgeCardID))
+	err := k.client.Delete(ctx, fmt.Sprintf("/knowledge/%s", url.PathEscape(knowledgeCardID)))
 	if err != nil {
 		return fmt.Errorf("failed to delete knowledge card %s: %w", knowledgeCardID, err)
 	}
@@ -172,7 +172,7 @@ func (k *KnowledgeClient) AssociateWithPersona(ctx context.Context, knowledgeCar
 	body := map[string]interface{}{
 		"knowledgeCardIds": []string{knowledgeCardID},
 	}
-	err := k.client.Post(ctx, fmt.Sprintf("/personas/%s/knowledge", personaID), body, nil)
+	err := k.client.Post(ctx, fmt.Sprintf("/personas/%s/knowledge", url.PathEscape(personaID)), body, nil)
 	if err != nil {
 		return fmt.Errorf("failed to associate knowledge card %s with persona %s: %w", knowledgeCardID, personaID, err)
 	}
@@ -184,7 +184,7 @@ func (k *KnowledgeClient) DisassociateFromPersona(ctx context.Context, knowledge
 	body := map[string]interface{}{
 		"knowledgeCardIds": []string{knowledgeCardID},
 	}
-	err := k.client.doRequest(ctx, "DELETE", fmt.Sprintf("/personas/%s/knowledge", personaID), body, nil)
+	err := k.client.doRequest(ctx, "DELETE", fmt.Sprintf("/personas/%s/knowledge", url.PathEscape(personaID)), body, nil)
 	if err != nil {
 		return fmt.Errorf("failed to disassociate knowledge card %s from persona %s: %w", knowledgeCardID, personaID, err)
 	}
@@ -194,7 +194,7 @@ func (k *KnowledgeClient) DisassociateFromPersona(ctx context.Context, knowledge
 // GetPersonaKnowledge retrieves all knowledge cards associated with a persona
 func (k *KnowledgeClient) GetPersonaKnowledge(ctx context.Context, personaID string) ([]KnowledgeCard, error) {
 	var cards []KnowledgeCard
-	err := k.client.Get(ctx, fmt.Sprintf("/personas/%s/knowledge", personaID), &cards)
+	err := k.client.Get(ctx, fmt.Sprintf("/personas/%s/knowledge", url.PathEscape(personaID)), &cards)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get knowledge for persona %s: %w", personaID, err)
 	}

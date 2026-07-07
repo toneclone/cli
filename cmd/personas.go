@@ -292,12 +292,7 @@ func runCreatePersona(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create persona: %w", err)
 	}
 
-	fmt.Printf("✓ Persona '%s' created successfully\n", created.Name)
-	fmt.Printf("  ID: %s\n", created.PersonaID)
-	fmt.Printf("  Type: %s\n", created.PersonaType)
-	fmt.Printf("  Status: %s\n", created.Status)
-
-	return nil
+	return outputPersonaCreated(created)
 }
 
 func runUpdatePersona(cmd *cobra.Command, args []string) error {
@@ -346,12 +341,7 @@ func runUpdatePersona(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to update persona: %w", err)
 	}
 
-	fmt.Printf("✓ Persona updated successfully\n")
-	fmt.Printf("  Name: %s\n", updated.Name)
-	fmt.Printf("  Type: %s\n", updated.PersonaType)
-	fmt.Printf("  Status: %s\n", updated.Status)
-
-	return nil
+	return outputPersonaUpdated(updated)
 }
 
 func runDeletePersona(cmd *cobra.Command, args []string) error {
@@ -576,6 +566,28 @@ func outputPersonaJSON(persona *client.Persona) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(persona)
+}
+
+func outputPersonaCreated(persona *client.Persona) error {
+	if wantsJSONFormat(personaFormat) {
+		return outputPersonaJSON(persona)
+	}
+	fmt.Printf("✓ Persona '%s' created successfully\n", persona.Name)
+	fmt.Printf("  ID: %s\n", persona.PersonaID)
+	fmt.Printf("  Type: %s\n", persona.PersonaType)
+	fmt.Printf("  Status: %s\n", persona.Status)
+	return nil
+}
+
+func outputPersonaUpdated(persona *client.Persona) error {
+	if wantsJSONFormat(personaFormat) {
+		return outputPersonaJSON(persona)
+	}
+	fmt.Printf("✓ Persona updated successfully\n")
+	fmt.Printf("  Name: %s\n", persona.Name)
+	fmt.Printf("  Type: %s\n", persona.PersonaType)
+	fmt.Printf("  Status: %s\n", persona.Status)
+	return nil
 }
 
 func formatTime(t time.Time) string {

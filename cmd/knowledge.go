@@ -392,15 +392,16 @@ func runCreateKnowledgeCard(cmd *cobra.Command, args []string) error {
 }
 
 func runCreateKnowledgeCardFromURL(cmd *cobra.Command, args []string) error {
-	if err := validateKnowledgeSourceURL(knowledgeURL); err != nil {
+	normalizedURL, err := validateKnowledgeSourceURL(knowledgeURL)
+	if err != nil {
 		return err
 	}
 	apiClient, err := newAPIClient(30)
 	if err != nil {
 		return err
 	}
-	ctx := context.Background()
-	response, err := apiClient.Knowledge.CreateFromURL(ctx, knowledgeURL, knowledgeInstructionsHint)
+	ctx := cmd.Context()
+	response, err := apiClient.Knowledge.CreateFromURL(ctx, normalizedURL, knowledgeInstructionsHint)
 	if err != nil {
 		return err
 	}
@@ -844,39 +845,39 @@ func outputKnowledgeIngestResponse(response *client.KnowledgeCardIngestResponse)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(sanitizeKnowledgeIngestResponse(response))
 	}
-	fmt.Printf("✓ Knowledge card '%s' created successfully\n", response.KnowledgeCard.Name)
+	fmt.Printf("✓ Knowledge card '%s' created successfully\n", terminalSafe(response.KnowledgeCard.Name))
 	fmt.Printf("  ID: %s\n", response.KnowledgeCard.KnowledgeCardID)
-	fmt.Printf("  Source: %s", response.Source.Type)
+	fmt.Printf("  Source: %s", terminalSafe(response.Source.Type))
 	if response.Source.URL != "" {
 		fmt.Printf(" %s", sanitizeURLForOutput(response.Source.URL))
 	} else if response.Source.Filename != "" {
-		fmt.Printf(" %s", response.Source.Filename)
+		fmt.Printf(" %s", terminalSafe(response.Source.Filename))
 	} else if response.Source.DisplayName != "" {
-		fmt.Printf(" %s", response.Source.DisplayName)
+		fmt.Printf(" %s", terminalSafe(response.Source.DisplayName))
 	}
 	fmt.Println()
 	if response.Source.ExtractedCharCount > 0 {
 		fmt.Printf("  Extracted: %d chars\n", response.Source.ExtractedCharCount)
 	}
 	if response.Synthesis.Summary != "" {
-		fmt.Printf("\nSummary:\n%s\n", response.Synthesis.Summary)
+		fmt.Printf("\nSummary:\n%s\n", terminalSafe(response.Synthesis.Summary))
 	}
 	if len(response.Synthesis.KeyFacts) > 0 {
 		fmt.Println("\nKey facts:")
 		for _, fact := range response.Synthesis.KeyFacts {
-			fmt.Printf("- %s\n", fact)
+			fmt.Printf("- %s\n", terminalSafe(fact))
 		}
 	}
 	if len(response.Synthesis.UsageNotes) > 0 {
 		fmt.Println("\nUsage notes:")
 		for _, note := range response.Synthesis.UsageNotes {
-			fmt.Printf("- %s\n", note)
+			fmt.Printf("- %s\n", terminalSafe(note))
 		}
 	}
 	if len(response.Synthesis.Warnings) > 0 {
 		fmt.Println("\nWarnings:")
 		for _, warning := range response.Synthesis.Warnings {
-			fmt.Printf("- %s\n", warning)
+			fmt.Printf("- %s\n", terminalSafe(warning))
 		}
 	}
 	return nil
@@ -894,44 +895,52 @@ func outputKnowledgeSources(sources []client.KnowledgeCardSource) error {
 		return nil
 	}
 	for _, source := range sources {
-		fmt.Printf("Source: %s — %s\n", source.Type, source.DisplayName)
-		fmt.Printf("Status: %s\n", source.Status)
+		fmt.Printf("Source: %s — %s\n", terminalSafe(source.Type), terminalSafe(source.DisplayName))
+		fmt.Printf("Status: %s\n", terminalSafe(source.Status))
 		if source.URL != "" {
 			fmt.Printf("URL: %s\n", sanitizeURLForOutput(source.URL))
 		}
 		if source.Filename != "" {
-			fmt.Printf("File: %s\n", source.Filename)
+			fmt.Printf("File: %s\n", terminalSafe(source.Filename))
 		}
 		if source.ExtractedCharCount > 0 {
 			fmt.Printf("Extracted: %d chars\n", source.ExtractedCharCount)
 		}
 		if source.ExtractedTextPreview != "" {
-			fmt.Printf("Preview:\n%s\n", source.ExtractedTextPreview)
+			fmt.Printf("Preview:\n%s\n", terminalSafe(source.ExtractedTextPreview))
 		}
 		fmt.Println()
 	}
 	return nil
 }
 
-func validateKnowledgeSourceURL(raw string) error {
+func validateKnowledgeSourceURL(raw string) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed == nil || parsed.Hostname() == "" {
-		return fmt.Errorf("invalid URL")
+		return "", fmt.Errorf("invalid URL")
 	}
 	if parsed.User != nil {
-		return fmt.Errorf("URLs with embedded credentials are not allowed")
+		return "", fmt.Errorf("URLs with embedded credentials are not allowed")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("URL must use http or https")
+		return "", fmt.Errorf("URL must use http or https")
+	}
+	if parsed.Fragment != "" {
+		return "", fmt.Errorf("URL fragments are not allowed")
+	}
+	for key := range parsed.Query() {
+		if isSensitiveURLParam(key) {
+			return "", fmt.Errorf("URLs with sensitive query parameters are not allowed")
+		}
 	}
 	host := strings.ToLower(parsed.Hostname())
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
-		return fmt.Errorf("localhost URLs are not allowed")
+		return "", fmt.Errorf("localhost URLs are not allowed")
 	}
 	if ip, err := netip.ParseAddr(host); err == nil && !isPublicKnowledgeSourceIP(ip) {
-		return fmt.Errorf("private or local IP URLs are not allowed")
+		return "", fmt.Errorf("private or local IP URLs are not allowed")
 	}
-	return nil
+	return parsed.String(), nil
 }
 
 func isPublicKnowledgeSourceIP(ip netip.Addr) bool {
@@ -988,4 +997,17 @@ func sanitizeKnowledgeSource(source client.KnowledgeCardSource) client.Knowledge
 		source.URL = sanitizeURLForOutput(source.URL)
 	}
 	return source
+}
+
+func terminalSafe(value string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\n', '\t':
+			return r
+		}
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return -1
+		}
+		return r
+	}, value)
 }

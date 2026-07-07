@@ -109,3 +109,43 @@ func TestKnowledgeSourcesUsesEscapedCardID(t *testing.T) {
 		t.Fatalf("unexpected sources: %+v", sources)
 	}
 }
+
+func TestKnowledgeResourceMethodsEscapePathIDs(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.EscapedPath())
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodGet:
+			w.Write([]byte(`[]`))
+		case http.MethodPut:
+			w.Write([]byte(`{"knowledgeCardId":"card/1","name":"n","instructions":"i"}`))
+		case http.MethodPost:
+			w.Write([]byte(`{}`))
+		case http.MethodDelete:
+			w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	tc := NewToneCloneClientFromConfig(server.URL, "test_key", 0)
+	ctx := context.Background()
+	_, _ = tc.Knowledge.Update(ctx, "card/1", &KnowledgeCard{Name: "n", Instructions: "i"})
+	_ = tc.Knowledge.Delete(ctx, "card/1")
+	_ = tc.Knowledge.AssociateWithPersona(ctx, "card/1", "persona/1")
+	_ = tc.Knowledge.DisassociateFromPersona(ctx, "card/1", "persona/1")
+	_, _ = tc.Knowledge.GetPersonaKnowledge(ctx, "persona/1")
+
+	want := []string{
+		"PUT /knowledge/card%2F1",
+		"DELETE /knowledge/card%2F1",
+		"POST /personas/persona%2F1/knowledge",
+		"DELETE /personas/persona%2F1/knowledge",
+		"GET /personas/persona%2F1/knowledge",
+	}
+	for i, expected := range want {
+		if i >= len(paths) || paths[i] != expected {
+			t.Fatalf("path %d = %q, want %q (all paths: %v)", i, paths[i], expected, paths)
+		}
+	}
+}

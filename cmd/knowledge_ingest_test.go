@@ -98,16 +98,22 @@ func TestValidateKnowledgeSourceURLRejectsUnsafeInputs(t *testing.T) {
 	for _, raw := range []string{
 		"ftp://example.com/file",
 		"https://user:pass@example.com/private",
+		"https://example.com/private?token=secret",
+		"https://example.com/private#access_token=secret",
 		"http://localhost/page",
 		"http://127.0.0.1/page",
 		"http://10.0.0.1/page",
 	} {
-		if err := validateKnowledgeSourceURL(raw); err == nil {
+		if _, err := validateKnowledgeSourceURL(raw); err == nil {
 			t.Fatalf("expected %q to be rejected", raw)
 		}
 	}
-	if err := validateKnowledgeSourceURL("https://example.com/page"); err != nil {
+	got, err := validateKnowledgeSourceURL(" https://example.com/page?ok=yes ")
+	if err != nil {
 		t.Fatalf("expected public https URL to be allowed: %v", err)
+	}
+	if got != "https://example.com/page?ok=yes" {
+		t.Fatalf("expected normalized URL, got %q", got)
 	}
 }
 
@@ -118,5 +124,15 @@ func TestSanitizeURLForOutputRedactsSensitiveParams(t *testing.T) {
 	}
 	if !strings.Contains(got, "ok=yes") {
 		t.Fatalf("expected non-sensitive params preserved, got %q", got)
+	}
+}
+
+func TestTerminalSafeStripsControlCharacters(t *testing.T) {
+	got := terminalSafe("safe\x1b]52;c;clipboard\a\nnext")
+	if strings.ContainsAny(got, "\x1b\a") {
+		t.Fatalf("expected terminal controls removed, got %q", got)
+	}
+	if !strings.Contains(got, "\nnext") {
+		t.Fatalf("expected newlines preserved, got %q", got)
 	}
 }

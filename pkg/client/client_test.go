@@ -97,6 +97,13 @@ func TestClientSendsDevAuthHeaderWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRetryDelayCapsRetryAfter(t *testing.T) {
+	delay := retryDelay(&RateLimitError{RetryAfterSeconds: 86400}, 0, time.Second)
+	if delay != 60*time.Second {
+		t.Fatalf("expected retry delay capped at 60s, got %v", delay)
+	}
+}
+
 func TestClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
