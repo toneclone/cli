@@ -122,10 +122,15 @@ func (e ErrorResponse) Error() string {
 
 // makeRequest performs an HTTP request to the API
 func (c *Client) makeRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
-	// Construct URL
-	u, err := url.JoinPath(c.baseURL, path)
+	// Construct URL. url.JoinPath treats '?' as path data, so split query
+	// strings supplied by resource clients before joining the URL path.
+	pathOnly, rawQuery, _ := strings.Cut(path, "?")
+	u, err := url.JoinPath(c.baseURL, pathOnly)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct URL: %w", err)
+	}
+	if rawQuery != "" {
+		u += "?" + rawQuery
 	}
 
 	// Prepare request body

@@ -374,6 +374,18 @@ func outputDraftsText(drafts *client.GenerateDraftsResponse, persona *client.Per
 			}
 		}
 		fmt.Fprintf(os.Stderr, "=== %s ===\n", label)
+		if writeVerbose && v.Angle != nil {
+			if v.Angle.Approach != "" {
+				fmt.Fprintf(os.Stderr, "Approach: %s\n", v.Angle.Approach)
+			}
+			if len(v.Angle.VoiceEmphasis) > 0 {
+				fmt.Fprintf(os.Stderr, "Voice: %s\n", strings.Join(v.Angle.VoiceEmphasis, ", "))
+			}
+			if len(v.Angle.Avoid) > 0 {
+				fmt.Fprintf(os.Stderr, "Avoid: %s\n", strings.Join(v.Angle.Avoid, ", "))
+			}
+			fmt.Fprintln(os.Stderr)
+		}
 		fmt.Print(v.Content)
 		if !strings.HasSuffix(v.Content, "\n") {
 			fmt.Println()

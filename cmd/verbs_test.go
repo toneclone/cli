@@ -46,7 +46,7 @@ func TestSourceTextMissingFile(t *testing.T) {
 }
 
 func TestVerbsRegistered(t *testing.T) {
-	for _, name := range []string{"personalize", "humanize", "quota", "prime"} {
+	for _, name := range []string{"personalize", "humanize", "quota", "prime", "critique", "recipes"} {
 		found := false
 		for _, c := range rootCmd.Commands() {
 			if c.Name() == name {
