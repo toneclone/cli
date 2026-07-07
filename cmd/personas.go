@@ -376,6 +376,9 @@ func runDeletePersona(cmd *cobra.Command, args []string) error {
 
 	// Confirm deletion
 	if !personaConfirm {
+		if wantsJSONFormat(personaFormat) {
+			return fmt.Errorf("--confirm is required when deleting with --json")
+		}
 		fmt.Printf("Are you sure you want to delete persona '%s' (%s)? [y/N]: ", persona.Name, persona.PersonaID)
 		var response string
 		fmt.Scanln(&response)
@@ -391,6 +394,9 @@ func runDeletePersona(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to delete persona: %w", err)
 	}
 
+	if wantsJSONFormat(personaFormat) {
+		return writeJSON(map[string]interface{}{"deleted": true, "persona": persona})
+	}
 	fmt.Printf("✓ Persona '%s' deleted successfully\n", persona.Name)
 	return nil
 }

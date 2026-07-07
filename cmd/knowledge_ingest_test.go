@@ -133,6 +133,43 @@ func TestSanitizeURLForOutputRedactsSensitiveParams(t *testing.T) {
 	}
 }
 
+func TestSensitiveURLParamDoesNotRejectKeyword(t *testing.T) {
+	if isSensitiveURLParam("keyword") {
+		t.Fatal("did not expect benign keyword parameter to be sensitive")
+	}
+	for _, key := range []string{"token", "api_key", "access_token", "client-secret"} {
+		if !isSensitiveURLParam(key) {
+			t.Fatalf("expected %q to be sensitive", key)
+		}
+	}
+}
+
+func TestKnowledgeTableAndDetailsSanitizeTerminalOutput(t *testing.T) {
+	oldStdout := os.Stdout
+	t.Cleanup(func() { os.Stdout = oldStdout })
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = write
+	card := client.KnowledgeCard{KnowledgeCardID: "k1", Name: "Name\x1b]52;c;bad\a", Instructions: "Instructions\x1b[31m"}
+	if err := outputKnowledgeTable([]client.KnowledgeCard{card}); err != nil {
+		t.Fatal(err)
+	}
+	if err := outputKnowledgeCardDetails(&card); err != nil {
+		t.Fatal(err)
+	}
+	write.Close()
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(read); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.ContainsAny(out, "\x1b\a") {
+		t.Fatalf("expected terminal controls stripped, got %q", out)
+	}
+}
+
 func TestKnowledgeDeleteJSONRequiresConfirm(t *testing.T) {
 	oldJSON := jsonOutput
 	oldFormat := knowledgeFormat

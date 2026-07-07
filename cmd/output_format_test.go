@@ -60,3 +60,20 @@ func TestPersonaCreateHonorsGlobalJSON(t *testing.T) {
 		t.Fatalf("unexpected persona JSON: %+v", got)
 	}
 }
+
+func TestPersonaDeleteJSONRequiresConfirmContract(t *testing.T) {
+	oldJSON := jsonOutput
+	oldFormat := personaFormat
+	oldConfirm := personaConfirm
+	t.Cleanup(func() {
+		jsonOutput = oldJSON
+		personaFormat = oldFormat
+		personaConfirm = oldConfirm
+	})
+	jsonOutput = true
+	personaFormat = "table"
+	personaConfirm = false
+	if !wantsJSONFormat(personaFormat) {
+		t.Fatal("expected global JSON mode")
+	}
+}

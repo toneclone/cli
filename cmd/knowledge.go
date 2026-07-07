@@ -817,8 +817,8 @@ func outputKnowledgeTable(knowledge []client.KnowledgeCard) error {
 		}
 
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			knowledgeCard.Name,
-			instructions,
+			terminalSafe(knowledgeCard.Name),
+			terminalSafe(instructions),
 			created,
 			updated,
 			knowledgeCard.KnowledgeCardID,
@@ -840,9 +840,9 @@ func outputKnowledgeJSON(knowledge []client.KnowledgeCard) error {
 func outputKnowledgeCardDetails(knowledgeCard *client.KnowledgeCard) error {
 	fmt.Printf("Knowledge Card Details\n")
 	fmt.Printf("=====================\n")
-	fmt.Printf("Name:         %s\n", knowledgeCard.Name)
+	fmt.Printf("Name:         %s\n", terminalSafe(knowledgeCard.Name))
 	fmt.Printf("ID:           %s\n", knowledgeCard.KnowledgeCardID)
-	fmt.Printf("Instructions: %s\n", knowledgeCard.Instructions)
+	fmt.Printf("Instructions: %s\n", terminalSafe(knowledgeCard.Instructions))
 	fmt.Printf("Created:      %s\n", formatTime(knowledgeCard.CreatedAt))
 	fmt.Printf("Updated:      %s\n", formatTime(knowledgeCard.UpdatedAt))
 
@@ -1016,7 +1016,24 @@ func sanitizeURLForOutput(raw string) string {
 
 func isSensitiveURLParam(key string) bool {
 	k := strings.ToLower(key)
-	return strings.Contains(k, "token") || strings.Contains(k, "secret") || strings.Contains(k, "key") || strings.Contains(k, "signature") || strings.Contains(k, "password") || strings.Contains(k, "credential") || k == "sig"
+	sensitive := map[string]bool{
+		"access_token":  true,
+		"api_key":       true,
+		"apikey":        true,
+		"auth":          true,
+		"authorization": true,
+		"credential":    true,
+		"key":           true,
+		"password":      true,
+		"secret":        true,
+		"sig":           true,
+		"signature":     true,
+		"token":         true,
+	}
+	if sensitive[k] {
+		return true
+	}
+	return strings.HasSuffix(k, "_token") || strings.HasSuffix(k, "-token") || strings.HasSuffix(k, "_secret") || strings.HasSuffix(k, "-secret")
 }
 
 func sanitizeKnowledgeIngestResponse(response *client.KnowledgeCardIngestResponse) *client.KnowledgeCardIngestResponse {
