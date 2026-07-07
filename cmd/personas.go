@@ -207,7 +207,7 @@ func runListPersonas(cmd *cobra.Command, args []string) error {
 	sortPersonas(personas, personaSort)
 
 	// Output personas
-	if personaFormat == "json" {
+	if wantsJSONFormat(personaFormat) {
 		return outputPersonasJSON(personas)
 	}
 
@@ -244,7 +244,7 @@ func runGetPersona(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output persona
-	if personaFormat == "json" {
+	if wantsJSONFormat(personaFormat) {
 		return outputPersonaJSON(persona)
 	}
 

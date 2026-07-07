@@ -243,7 +243,7 @@ func runListKnowledge(cmd *cobra.Command, args []string) error {
 	sortKnowledge(knowledge, knowledgeSort)
 
 	// Output knowledge
-	if knowledgeFormat == "json" {
+	if wantsJSONFormat(knowledgeFormat) {
 		return outputKnowledgeJSON(knowledge)
 	}
 
@@ -280,7 +280,7 @@ func runGetKnowledgeCard(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output knowledge card
-	if knowledgeFormat == "json" {
+	if wantsJSONFormat(knowledgeFormat) {
 		return outputKnowledgeCardJSON(knowledgeCard)
 	}
 
