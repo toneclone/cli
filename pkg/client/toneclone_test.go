@@ -23,6 +23,10 @@ func TestNewToneCloneClient(t *testing.T) {
 	if client.Generate == nil {
 		t.Error("Expected Generate client to be initialized")
 	}
+
+	if client.StyleGuard == nil {
+		t.Error("Expected StyleGuard client to be initialized")
+	}
 }
 
 func TestNewToneCloneClientFromConfig(t *testing.T) {
@@ -119,6 +123,37 @@ func TestValidateConnectionFailure(t *testing.T) {
 	err := client.ValidateConnection(context.Background())
 	if err == nil {
 		t.Fatal("Expected error for server failure")
+	}
+}
+
+func TestQueryParamsPreserved(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/style-guard/bundle/preview" {
+			t.Errorf("Expected path /style-guard/bundle/preview, got %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("bundleType") != "comprehensive" {
+			t.Errorf("Expected query param bundleType=comprehensive, got %s", r.URL.Query().Get("bundleType"))
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"version":"2.0.0","type":"comprehensive","items":[{"word":"delve into","replacement":"explore","mode":"CUSTOM","category":"phrase"}]}`))
+	}))
+	defer server.Close()
+
+	client := NewToneCloneClient("test_key", WithBaseURL(server.URL))
+
+	resp, err := client.StyleGuard.BundlePreview(context.Background(), "comprehensive")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp.Version != "2.0.0" {
+		t.Errorf("Expected version 2.0.0, got %s", resp.Version)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("Expected 1 item, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Word != "delve into" {
+		t.Errorf("Expected word 'delve into', got %s", resp.Items[0].Word)
 	}
 }
 

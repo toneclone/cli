@@ -79,7 +79,7 @@ func init() {
 }
 
 func runCritiqueGet(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(critiqueTimeout)
+	apiClient, err := newAPIClientWithTimeout(critiqueTimeout)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func runCritiqueGet(cmd *cobra.Command, args []string) error {
 }
 
 func runCritiqueHistory(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(critiqueTimeout)
+	apiClient, err := newAPIClientWithTimeout(critiqueTimeout)
 	if err != nil {
 		return err
 	}

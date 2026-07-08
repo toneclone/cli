@@ -73,7 +73,7 @@ func init() {
 }
 
 func runRecipesList(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(recipeTimeout)
+	apiClient, err := newAPIClientWithTimeout(recipeTimeout)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func runRecipesList(cmd *cobra.Command, args []string) error {
 }
 
 func runRecipesCreate(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(recipeTimeout)
+	apiClient, err := newAPIClientWithTimeout(recipeTimeout)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func runRecipesCreate(cmd *cobra.Command, args []string) error {
 }
 
 func runRecipesUpdate(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(recipeTimeout)
+	apiClient, err := newAPIClientWithTimeout(recipeTimeout)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func runRecipesUpdate(cmd *cobra.Command, args []string) error {
 }
 
 func runRecipesSuggest(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(recipeTimeout)
+	apiClient, err := newAPIClientWithTimeout(recipeTimeout)
 	if err != nil {
 		return err
 	}

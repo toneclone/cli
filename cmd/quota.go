@@ -29,7 +29,7 @@ func init() {
 }
 
 func runQuota(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(30)
+	apiClient, err := newAPIClientWithTimeout(30)
 	if err != nil {
 		return err
 	}

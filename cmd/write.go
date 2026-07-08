@@ -88,7 +88,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	apiClient, err := newAPIClient(writeTimeout)
+	apiClient, err := newAPIClientWithTimeout(writeTimeout)
 	if err != nil {
 		return err
 	}

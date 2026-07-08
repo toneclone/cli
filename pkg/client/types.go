@@ -34,16 +34,38 @@ const (
 
 // Persona represents a writing persona
 type Persona struct {
-	PersonaID         string    `json:"personaId"`
-	Name              string    `json:"name"`
-	LastUsedAt        time.Time `json:"lastUsedAt"`
-	LastModifiedAt    time.Time `json:"lastModifiedAt"`
-	Status            string    `json:"status"`
-	TrainingStatus    string    `json:"trainingStatus"`
-	PersonaType       string    `json:"personaType"`
-	VoiceEvolution    bool      `json:"voiceEvolution"`
-	PromptDescription string    `json:"personaPromptDescription,omitempty"`
-	IsBuiltIn         bool      `json:"isBuiltIn,omitempty"`
+	PersonaID         string                `json:"personaId"`
+	Name              string                `json:"name"`
+	LastUsedAt        time.Time             `json:"lastUsedAt"`
+	LastModifiedAt    time.Time             `json:"lastModifiedAt"`
+	Status            string                `json:"status"`
+	TrainingStatus    string                `json:"trainingStatus"`
+	PersonaType       string                `json:"personaType"`
+	VoiceEvolution    bool                  `json:"voiceEvolution"`
+	PromptDescription string                `json:"personaPromptDescription,omitempty"`
+	IsBuiltIn         bool                  `json:"isBuiltIn,omitempty"`
+	Imperfections     *ImperfectionSettings `json:"imperfections,omitempty"`
+}
+
+// StyleGuardWord represents a style guard rule
+type StyleGuardWord struct {
+	StyleGuardID      string    `json:"styleGuardId"`
+	Word              string    `json:"word"`
+	PersonaID         string    `json:"personaId,omitempty"`
+	Mode              string    `json:"mode"`
+	CustomReplacement string    `json:"customReplacement,omitempty"`
+	Source            string    `json:"source,omitempty"`
+	BundleVersion     string    `json:"bundleVersion,omitempty"`
+	CreatedAt         time.Time `json:"createdAt"`
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+// ImperfectionSettings defines typo generation configuration
+type ImperfectionSettings struct {
+	Enabled           bool     `json:"enabled"`
+	Rate              float64  `json:"rate"`
+	MaxPerChunk       int      `json:"maxPerChunk"`
+	ProtectedContexts []string `json:"protectedContexts,omitempty"`
 }
 
 // PersonaListResponse represents the response from listing personas

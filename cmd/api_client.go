@@ -8,7 +8,7 @@ import (
 	"github.com/toneclone/cli/pkg/client"
 )
 
-func newAPIClient(timeout int) (*client.ToneCloneClient, error) {
+func newAPIClientWithTimeout(timeout int) (*client.ToneCloneClient, error) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)

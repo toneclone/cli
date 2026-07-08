@@ -93,7 +93,7 @@ func sourceText(text, file string) (string, error) {
 }
 
 func runPersonalize(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(personalizeTimeout)
+	apiClient, err := newAPIClientWithTimeout(personalizeTimeout)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func runPersonalize(cmd *cobra.Command, args []string) error {
 }
 
 func runHumanize(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(humanizeTimeout)
+	apiClient, err := newAPIClientWithTimeout(humanizeTimeout)
 	if err != nil {
 		return err
 	}

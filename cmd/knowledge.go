@@ -423,7 +423,7 @@ func runCreateKnowledgeCardFromURL(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	apiClient, err := newAPIClient(30)
+	apiClient, err := newAPIClientWithTimeout(30)
 	if err != nil {
 		return err
 	}
@@ -436,7 +436,7 @@ func runCreateKnowledgeCardFromURL(cmd *cobra.Command, args []string) error {
 }
 
 func runCreateKnowledgeCardFromFile(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(30)
+	apiClient, err := newAPIClientWithTimeout(30)
 	if err != nil {
 		return err
 	}
@@ -524,7 +524,7 @@ func runUpdateKnowledgeCard(cmd *cobra.Command, args []string) error {
 }
 
 func runKnowledgeSources(cmd *cobra.Command, args []string) error {
-	apiClient, err := newAPIClient(30)
+	apiClient, err := newAPIClientWithTimeout(30)
 	if err != nil {
 		return err
 	}
