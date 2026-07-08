@@ -353,17 +353,13 @@ func (c *Client) SetTimeout(timeout time.Duration) {
 	c.httpClient.Timeout = timeout
 }
 
-// WithContext returns a new context with timeout if none is set
+// WithContext returns a non-nil context. Request timeouts are enforced by the
+// underlying HTTP client; callers that need context cancellation should derive
+// and cancel their own context.
 func (c *Client) WithContext(ctx context.Context) context.Context {
 	if ctx == nil {
-		ctx = context.Background()
+		return context.Background()
 	}
-
-	// If context doesn't have a deadline, add one based on client timeout
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		ctx, _ = context.WithTimeout(ctx, c.httpClient.Timeout)
-	}
-
 	return ctx
 }
 
