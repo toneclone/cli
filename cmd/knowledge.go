@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/netip"
 	"net/url"
 	"os"
@@ -18,7 +19,9 @@ import (
 	"github.com/toneclone/cli/pkg/client"
 )
 
-const maxKnowledgeSourceFileBytes = 10 * 1024 * 1024
+var lookupKnowledgeSourceHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
+	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+}
 
 var specialUseKnowledgeSourcePrefixes = []netip.Prefix{
 	mustKnowledgeSourcePrefix("0.0.0.0/8"),
@@ -444,7 +447,7 @@ func runCreateKnowledgeCardFromFile(cmd *cobra.Command, args []string) error {
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("source file must be a regular file")
 	}
-	if info.Size() > maxKnowledgeSourceFileBytes {
+	if info.Size() > client.KnowledgeSourceFileMaxBytes {
 		return fmt.Errorf("source file is too large: maximum size is 10MB")
 	}
 	file, err := os.Open(knowledgeFile)
@@ -967,10 +970,31 @@ func validateKnowledgeSourceURL(raw string) (string, error) {
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return "", fmt.Errorf("localhost URLs are not allowed")
 	}
-	if ip, err := netip.ParseAddr(host); err == nil && !isPublicKnowledgeSourceIP(ip) {
-		return "", fmt.Errorf("private or local IP URLs are not allowed")
+	if err := validateKnowledgeSourceHostPublic(host); err != nil {
+		return "", err
 	}
 	return parsed.String(), nil
+}
+
+func validateKnowledgeSourceHostPublic(host string) error {
+	if ip, err := netip.ParseAddr(host); err == nil {
+		if !isPublicKnowledgeSourceIP(ip) {
+			return fmt.Errorf("private or local IP URLs are not allowed")
+		}
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	addrs, err := lookupKnowledgeSourceHost(ctx, host)
+	if err != nil || len(addrs) == 0 {
+		return fmt.Errorf("URL host could not be verified as public")
+	}
+	for _, ip := range addrs {
+		if !isPublicKnowledgeSourceIP(ip) {
+			return fmt.Errorf("URL host resolves to a private or local IP")
+		}
+	}
+	return nil
 }
 
 func isPublicKnowledgeSourceIP(ip netip.Addr) bool {

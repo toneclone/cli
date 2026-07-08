@@ -15,7 +15,7 @@ type KnowledgeClient struct {
 	client *Client
 }
 
-const maxKnowledgeSourceFileBytes = 10 * 1024 * 1024
+const KnowledgeSourceFileMaxBytes = 10 * 1024 * 1024
 
 type KnowledgeCardSource struct {
 	SourceID             string `json:"sourceId"`
@@ -115,11 +115,11 @@ func (k *KnowledgeClient) CreateFromFile(ctx context.Context, filename string, c
 	if err != nil {
 		return nil, fmt.Errorf("failed to create multipart file part: %w", err)
 	}
-	written, err := io.Copy(part, io.LimitReader(content, maxKnowledgeSourceFileBytes+1))
+	written, err := io.Copy(part, io.LimitReader(content, KnowledgeSourceFileMaxBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read source file: %w", err)
 	}
-	if written > maxKnowledgeSourceFileBytes {
+	if written > KnowledgeSourceFileMaxBytes {
 		return nil, fmt.Errorf("source file is too large: maximum size is 10MB")
 	}
 	if instructionsHint != "" {

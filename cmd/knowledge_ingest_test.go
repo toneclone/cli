@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"net"
+	"net/netip"
 	"os"
 	"strings"
 	"testing"
@@ -22,6 +25,42 @@ func TestKnowledgeSourceCommandsRegistered(t *testing.T) {
 		if !found {
 			t.Fatalf("expected knowledge %s command to be registered", name)
 		}
+	}
+}
+
+func TestValidateKnowledgeSourceURLRejectsHostResolvingPrivate(t *testing.T) {
+	oldLookup := lookupKnowledgeSourceHost
+	t.Cleanup(func() { lookupKnowledgeSourceHost = oldLookup })
+	lookupKnowledgeSourceHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
+		if host != "internal.example" {
+			t.Fatalf("unexpected host lookup: %s", host)
+		}
+		return []netip.Addr{netip.MustParseAddr("10.0.0.5")}, nil
+	}
+	if _, err := validateKnowledgeSourceURL("https://internal.example/page"); err == nil {
+		t.Fatal("expected DNS name resolving to private IP to be rejected")
+	}
+}
+
+func TestValidateKnowledgeSourceURLAllowsHostResolvingPublic(t *testing.T) {
+	oldLookup := lookupKnowledgeSourceHost
+	t.Cleanup(func() { lookupKnowledgeSourceHost = oldLookup })
+	lookupKnowledgeSourceHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
+	if _, err := validateKnowledgeSourceURL("https://example.com/search?keyword=pricing"); err != nil {
+		t.Fatalf("expected public DNS and benign keyword param allowed: %v", err)
+	}
+}
+
+func TestValidateKnowledgeSourceURLRejectsUnverifiableDNS(t *testing.T) {
+	oldLookup := lookupKnowledgeSourceHost
+	t.Cleanup(func() { lookupKnowledgeSourceHost = oldLookup })
+	lookupKnowledgeSourceHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
+		return nil, &net.DNSError{Err: "no such host", Name: host}
+	}
+	if _, err := validateKnowledgeSourceURL("https://missing.example/page"); err == nil {
+		t.Fatal("expected unverifiable DNS host to be rejected")
 	}
 }
 
@@ -95,6 +134,11 @@ func TestKnowledgeIngestTextOutputIncludesSourceSummaryAndWarnings(t *testing.T)
 }
 
 func TestValidateKnowledgeSourceURLRejectsUnsafeInputs(t *testing.T) {
+	oldLookup := lookupKnowledgeSourceHost
+	t.Cleanup(func() { lookupKnowledgeSourceHost = oldLookup })
+	lookupKnowledgeSourceHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
 	for _, raw := range []string{
 		"ftp://example.com/file",
 		"https://user:pass@example.com/private",
