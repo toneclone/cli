@@ -207,7 +207,7 @@ func runListPersonas(cmd *cobra.Command, args []string) error {
 	sortPersonas(personas, personaSort)
 
 	// Output personas
-	if personaFormat == "json" {
+	if wantsJSONFormat(personaFormat) {
 		return outputPersonasJSON(personas)
 	}
 
@@ -251,7 +251,7 @@ func runGetPersona(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output persona
-	if personaFormat == "json" {
+	if wantsJSONFormat(personaFormat) {
 		return outputPersonaJSON(persona)
 	}
 
@@ -299,12 +299,7 @@ func runCreatePersona(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create persona: %w", err)
 	}
 
-	fmt.Printf("✓ Persona '%s' created successfully\n", created.Name)
-	fmt.Printf("  ID: %s\n", created.PersonaID)
-	fmt.Printf("  Type: %s\n", created.PersonaType)
-	fmt.Printf("  Status: %s\n", created.Status)
-
-	return nil
+	return outputPersonaCreated(created)
 }
 
 func runUpdatePersona(cmd *cobra.Command, args []string) error {
@@ -353,12 +348,7 @@ func runUpdatePersona(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to update persona: %w", err)
 	}
 
-	fmt.Printf("✓ Persona updated successfully\n")
-	fmt.Printf("  Name: %s\n", updated.Name)
-	fmt.Printf("  Type: %s\n", updated.PersonaType)
-	fmt.Printf("  Status: %s\n", updated.Status)
-
-	return nil
+	return outputPersonaUpdated(updated)
 }
 
 func runDeletePersona(cmd *cobra.Command, args []string) error {
@@ -393,6 +383,9 @@ func runDeletePersona(cmd *cobra.Command, args []string) error {
 
 	// Confirm deletion
 	if !personaConfirm {
+		if wantsJSONFormat(personaFormat) {
+			return fmt.Errorf("--confirm is required when deleting with --json")
+		}
 		fmt.Printf("Are you sure you want to delete persona '%s' (%s)? [y/N]: ", persona.Name, persona.PersonaID)
 		var response string
 		fmt.Scanln(&response)
@@ -408,6 +401,9 @@ func runDeletePersona(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to delete persona: %w", err)
 	}
 
+	if wantsJSONFormat(personaFormat) {
+		return writeJSON(map[string]interface{}{"deleted": true, "persona": persona})
+	}
 	fmt.Printf("✓ Persona '%s' deleted successfully\n", persona.Name)
 	return nil
 }
@@ -599,6 +595,28 @@ func outputPersonaJSON(persona *client.Persona) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(persona)
+}
+
+func outputPersonaCreated(persona *client.Persona) error {
+	if wantsJSONFormat(personaFormat) {
+		return outputPersonaJSON(persona)
+	}
+	fmt.Printf("✓ Persona '%s' created successfully\n", persona.Name)
+	fmt.Printf("  ID: %s\n", persona.PersonaID)
+	fmt.Printf("  Type: %s\n", persona.PersonaType)
+	fmt.Printf("  Status: %s\n", persona.Status)
+	return nil
+}
+
+func outputPersonaUpdated(persona *client.Persona) error {
+	if wantsJSONFormat(personaFormat) {
+		return outputPersonaJSON(persona)
+	}
+	fmt.Printf("✓ Persona updated successfully\n")
+	fmt.Printf("  Name: %s\n", persona.Name)
+	fmt.Printf("  Type: %s\n", persona.PersonaType)
+	fmt.Printf("  Status: %s\n", persona.Status)
+	return nil
 }
 
 func formatTime(t time.Time) string {

@@ -139,16 +139,20 @@ type TrainingFileListResponse struct {
 type GenerateTextRequest struct {
 	Prompt           string   `json:"prompt"`
 	PersonaID        string   `json:"personaId"`
+	Mode             string   `json:"mode,omitempty"`
+	Text             string   `json:"text,omitempty"`
 	KnowledgeCardID  string   `json:"knowledgeCardId,omitempty"`
 	KnowledgeCardIDs []string `json:"knowledgeCardIds,omitempty"`
 	Context          string   `json:"context,omitempty"`
 	SessionID        string   `json:"sessionId,omitempty"`
+	CreateSession    bool     `json:"createSession,omitempty"`
 	Document         string   `json:"document,omitempty"`
 	Selection        string   `json:"selection,omitempty"`
 	Formality        int      `json:"formality,omitempty"`
 	ReadingLevel     int      `json:"readingLevel,omitempty"`
 	Length           int      `json:"length,omitempty"`
 	Model            string   `json:"model,omitempty"`
+	N                int      `json:"n,omitempty"`
 	Streaming        *bool    `json:"streaming,omitempty"`
 }
 
@@ -159,6 +163,40 @@ type GenerateTextResponse struct {
 	KnowledgeCardID string `json:"knowledgeCardId,omitempty"`
 	Model           string `json:"model,omitempty"`
 	Tokens          int    `json:"tokens,omitempty"`
+	SessionID       string `json:"sessionId,omitempty"`
+	ReviewURL       string `json:"reviewUrl,omitempty"`
+}
+
+// DraftAngle describes one planned editorial angle for a draft variant.
+type DraftAngle struct {
+	Title         string   `json:"title"`
+	ShortLabel    string   `json:"shortLabel"`
+	Description   string   `json:"description"`
+	Approach      string   `json:"approach"`
+	VoiceEmphasis []string `json:"voiceEmphasis,omitempty"`
+	Avoid         []string `json:"avoid,omitempty"`
+}
+
+// DraftAnglePlan is the editorial plan for a multi-draft request.
+type DraftAnglePlan struct {
+	StrategyNote string       `json:"strategyNote"`
+	Angles       []DraftAngle `json:"angles"`
+}
+
+// DraftVariant is a single draft from a multi-draft (n>1) generation.
+type DraftVariant struct {
+	Content     string      `json:"content"`
+	Temperature float64     `json:"temperature"`
+	Index       int         `json:"index"`
+	Angle       *DraftAngle `json:"angle,omitempty"`
+}
+
+// GenerateDraftsResponse is the non-streaming multi-variant response envelope.
+type GenerateDraftsResponse struct {
+	Variants  []DraftVariant  `json:"variants"`
+	AnglePlan *DraftAnglePlan `json:"anglePlan,omitempty"`
+	SessionID string          `json:"sessionId,omitempty"`
+	ReviewURL string          `json:"reviewUrl,omitempty"`
 }
 
 // WritingSession represents a writing session

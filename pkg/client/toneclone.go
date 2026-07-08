@@ -13,6 +13,8 @@ type ToneCloneClient struct {
 	// Resource clients
 	Personas   *PersonasClient
 	Generate   *GenerateClient
+	Critique   *CritiqueClient
+	Recipes    *RecipesClient
 	Training   *TrainingClient
 	Knowledge  *KnowledgeClient
 	StyleGuard *StyleGuardClient
@@ -26,6 +28,8 @@ func NewToneCloneClient(apiKey string, options ...ClientOption) *ToneCloneClient
 		Client:     baseClient,
 		Personas:   NewPersonasClient(baseClient),
 		Generate:   NewGenerateClient(baseClient),
+		Critique:   NewCritiqueClient(baseClient),
+		Recipes:    NewRecipesClient(baseClient),
 		Training:   NewTrainingClient(baseClient),
 		Knowledge:  NewKnowledgeClient(baseClient),
 		StyleGuard: NewStyleGuardClient(baseClient),

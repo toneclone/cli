@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,20 +13,20 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/toneclone/cli/internal/config"
 	"github.com/toneclone/cli/pkg/client"
 )
 
 var (
 	// Write command flags
-	writePersona   string
-	writeKnowledge string
-	writePrompt    string
-	writeFile      string
-	writeOutput    string
-	writeVerbose   bool
-	writeTimeout   int
-	writeJson      bool
+	writePersona    string
+	writeKnowledge  string
+	writePrompt     string
+	writeFile       string
+	writeOutput     string
+	writeVerbose    bool
+	writeTimeout    int
+	writeReviewLink bool
+	writeDrafts     int
 )
 
 // writeCmd represents the write command
@@ -55,8 +56,7 @@ Knowledge Card Support:
   --knowledge "123,456"        Multiple knowledge cards by ID
 
 Output Options:
-  --output text     Plain text output (default)
-  --output json     JSON output with metadata
+  --json            JSON output with metadata
   --verbose         Show generation metadata and statistics`,
 	RunE: runWrite,
 }
@@ -69,34 +69,29 @@ func init() {
 	writeCmd.Flags().StringVar(&writeKnowledge, "knowledge", "", "knowledge card ID or name (supports comma-separated multiple cards)")
 	writeCmd.Flags().StringVar(&writePrompt, "prompt", "", "text prompt for generation")
 	writeCmd.Flags().StringVar(&writeFile, "file", "", "file containing the prompt")
-	writeCmd.Flags().StringVar(&writeOutput, "output", "text", "output format: text, json")
+	writeCmd.Flags().StringVar(&writeOutput, "output", "", "deprecated compatibility alias: use --json for JSON output")
+	writeCmd.Flags().MarkHidden("output")
 	writeCmd.Flags().BoolVar(&writeVerbose, "verbose", false, "show generation metadata and statistics")
 	writeCmd.Flags().IntVar(&writeTimeout, "timeout", 30, "request timeout in seconds")
-	writeCmd.Flags().BoolVar(&writeJson, "json", false, "output in JSON format (shorthand for --output json)")
+	writeCmd.Flags().BoolVar(&writeReviewLink, "review-link", false, "create a web review session and return a reviewUrl for the draft")
+	writeCmd.Flags().IntVarP(&writeDrafts, "drafts", "n", 1, "number of draft variants to generate (1-5), each from a different angle")
 
 	// Make persona required
 	writeCmd.MarkFlagRequired("persona")
 }
 
 func runWrite(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	if err := validateWriteDrafts(writeDrafts); err != nil {
+		return err
+	}
+	if err := normalizeWriteOutput(writeOutput); err != nil {
+		return err
 	}
 
-	// Get current API key
-	keyConfig, err := cfg.GetCurrentKey()
+	apiClient, err := newAPIClientWithTimeout(writeTimeout)
 	if err != nil {
-		return fmt.Errorf("authentication required: %w", err)
+		return err
 	}
-
-	// Create API client
-	apiClient := client.NewToneCloneClientFromConfig(
-		keyConfig.BaseURL,
-		keyConfig.Key,
-		time.Duration(writeTimeout)*time.Second,
-	)
 
 	// Get the prompt
 	prompt, err := getWritePrompt()
@@ -163,6 +158,7 @@ func runWrite(cmd *cobra.Command, args []string) error {
 		PersonaID:        persona.PersonaID,
 		KnowledgeCardID:  knowledgeCardID,
 		KnowledgeCardIDs: knowledgeCardIDs,
+		CreateSession:    writeReviewLink,
 	}
 
 	// Show generation info if verbose
@@ -186,24 +182,62 @@ func runWrite(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(writeTimeout)*time.Second)
 	defer cancel()
 
+	// Multi-draft path: request several variants and render them together.
+	if writeDrafts > 1 {
+		request.N = writeDrafts
+		drafts, err := apiClient.Generate.TextVariants(ctx, request)
+		if err != nil {
+			return classifyRateLimit(err)
+		}
+		if jsonOutput {
+			return outputDraftsJSON(drafts, persona)
+		}
+		return outputDraftsText(drafts, persona)
+	}
+
 	response, err := apiClient.Generate.Text(ctx, request)
 	if err != nil {
-		// Check for rate limit error and provide helpful message
-		if rateLimitErr, ok := err.(*client.RateLimitError); ok {
-			if rateLimitErr.RetryAfterSeconds > 0 {
-				return fmt.Errorf("Rate limit exceeded. Please try again in %d seconds", rateLimitErr.RetryAfterSeconds)
-			}
-			return fmt.Errorf("Rate limit exceeded. Please wait before making another request")
-		}
-		return fmt.Errorf("text generation failed: %w", err)
+		return classifyRateLimit(err)
 	}
 
 	// Output based on format
-	if writeJson || writeOutput == "json" {
+	if jsonOutput {
 		return outputWriteJSON(response, persona)
 	}
 
 	return outputWriteText(response, persona)
+}
+
+func validateWriteDrafts(drafts int) error {
+	if drafts < 1 || drafts > 5 {
+		return fmt.Errorf("--drafts must be between 1 and 5")
+	}
+	return nil
+}
+
+func normalizeWriteOutput(output string) error {
+	switch output {
+	case "", "text", "json":
+		if output == "json" {
+			jsonOutput = true
+		}
+		return nil
+	default:
+		return fmt.Errorf("--output is deprecated; use --json for JSON output")
+	}
+}
+
+// classifyRateLimit preserves the friendly rate-limit message while wrapping the
+// typed error (%w) so the global classifier can still emit a structured code.
+func classifyRateLimit(err error) error {
+	var rateLimitErr *client.RateLimitError
+	if errors.As(err, &rateLimitErr) {
+		if rateLimitErr.RetryAfterSeconds > 0 {
+			return fmt.Errorf("Rate limit exceeded. Please try again in %d seconds: %w", rateLimitErr.RetryAfterSeconds, err)
+		}
+		return fmt.Errorf("Rate limit exceeded. Please wait before making another request: %w", err)
+	}
+	return fmt.Errorf("text generation failed: %w", err)
 }
 
 func getWritePrompt() (string, error) {
@@ -272,10 +306,17 @@ func outputWriteText(response *client.GenerateTextResponse, persona *client.Pers
 		fmt.Println()
 	}
 
+	// Share the review link (if any) on stderr so it doesn't pollute piped output.
+	if response.ReviewURL != "" {
+		fmt.Fprintf(os.Stderr, "\nReview/edit: %s\n", response.ReviewURL)
+	}
+
 	// Show metadata if verbose
 	if writeVerbose {
 		fmt.Fprintf(os.Stderr, "\n--- Generation Metadata ---\n")
-		fmt.Fprintf(os.Stderr, "Persona: %s (%s)\n", persona.Name, persona.PersonaID)
+		if persona != nil {
+			fmt.Fprintf(os.Stderr, "Persona: %s (%s)\n", persona.Name, persona.PersonaID)
+		}
 		if response.Model != "" {
 			fmt.Fprintf(os.Stderr, "Model: %s\n", response.Model)
 		}
@@ -290,10 +331,12 @@ func outputWriteText(response *client.GenerateTextResponse, persona *client.Pers
 func outputWriteJSON(response *client.GenerateTextResponse, persona *client.Persona) error {
 	output := map[string]interface{}{
 		"text": response.Text,
-		"persona": map[string]string{
+	}
+	if persona != nil {
+		output["persona"] = map[string]string{
 			"id":   persona.PersonaID,
 			"name": persona.Name,
-		},
+		}
 	}
 
 	if response.Model != "" {
@@ -305,7 +348,77 @@ func outputWriteJSON(response *client.GenerateTextResponse, persona *client.Pers
 	if response.KnowledgeCardID != "" {
 		output["knowledge_card_id"] = response.KnowledgeCardID
 	}
+	if response.ReviewURL != "" {
+		output["reviewUrl"] = response.ReviewURL
+	}
+	if response.SessionID != "" {
+		output["sessionId"] = response.SessionID
+	}
 
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
+}
+
+func outputDraftsText(drafts *client.GenerateDraftsResponse, persona *client.Persona) error {
+	if drafts.AnglePlan != nil && drafts.AnglePlan.StrategyNote != "" {
+		fmt.Fprintf(os.Stderr, "Strategy: %s\n\n", drafts.AnglePlan.StrategyNote)
+	}
+	for i, v := range drafts.Variants {
+		label := fmt.Sprintf("Draft %d", i+1)
+		if v.Angle != nil {
+			if v.Angle.ShortLabel != "" {
+				label = fmt.Sprintf("Draft %d - %s", i+1, v.Angle.ShortLabel)
+			} else if v.Angle.Title != "" {
+				label = fmt.Sprintf("Draft %d - %s", i+1, v.Angle.Title)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "=== %s ===\n", label)
+		if writeVerbose && v.Angle != nil {
+			if v.Angle.Approach != "" {
+				fmt.Fprintf(os.Stderr, "Approach: %s\n", v.Angle.Approach)
+			}
+			if len(v.Angle.VoiceEmphasis) > 0 {
+				fmt.Fprintf(os.Stderr, "Voice: %s\n", strings.Join(v.Angle.VoiceEmphasis, ", "))
+			}
+			if len(v.Angle.Avoid) > 0 {
+				fmt.Fprintf(os.Stderr, "Avoid: %s\n", strings.Join(v.Angle.Avoid, ", "))
+			}
+			fmt.Fprintln(os.Stderr)
+		}
+		fmt.Print(v.Content)
+		if !strings.HasSuffix(v.Content, "\n") {
+			fmt.Println()
+		}
+		if i < len(drafts.Variants)-1 {
+			fmt.Println()
+		}
+	}
+	if drafts.ReviewURL != "" {
+		fmt.Fprintf(os.Stderr, "\nReview/edit: %s\n", drafts.ReviewURL)
+	}
+	return nil
+}
+
+func outputDraftsJSON(drafts *client.GenerateDraftsResponse, persona *client.Persona) error {
+	output := map[string]interface{}{
+		"drafts": drafts.Variants,
+	}
+	if persona != nil {
+		output["persona"] = map[string]string{
+			"id":   persona.PersonaID,
+			"name": persona.Name,
+		}
+	}
+	if drafts.AnglePlan != nil {
+		output["anglePlan"] = drafts.AnglePlan
+	}
+	if drafts.ReviewURL != "" {
+		output["reviewUrl"] = drafts.ReviewURL
+	}
+	if drafts.SessionID != "" {
+		output["sessionId"] = drafts.SessionID
+	}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(output)

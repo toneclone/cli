@@ -78,6 +78,32 @@ func TestClientHeaders(t *testing.T) {
 	}
 }
 
+func TestClientSendsDevAuthHeaderWhenConfigured(t *testing.T) {
+	t.Setenv("TONECLONE_DEV_AUTH", "dev-bypass-key")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Dev-Auth"); got != "dev-bypass-key" {
+			t.Errorf("X-Dev-Auth = %q, want dev-bypass-key", got)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"message":"ok"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("test_key", WithBaseURL(server.URL))
+	var response map[string]string
+	if err := client.Get(context.Background(), "/test", &response); err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+}
+
+func TestRetryDelayCapsRetryAfter(t *testing.T) {
+	delay := retryDelay(&RateLimitError{RetryAfterSeconds: 86400}, 0, time.Second)
+	if delay != 60*time.Second {
+		t.Fatalf("expected retry delay capped at 60s, got %v", delay)
+	}
+}
+
 func TestClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {

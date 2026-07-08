@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/toneclone/cli/cmd"
@@ -9,7 +8,7 @@ import (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		// Execute already rendered the error (structured in --json mode).
 		os.Exit(1)
 	}
 }

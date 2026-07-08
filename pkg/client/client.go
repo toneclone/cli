@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ const (
 type Client struct {
 	baseURL    string
 	apiKey     string
+	devAuthKey string
 	httpClient *http.Client
 	userAgent  string
 	timeout    time.Duration
@@ -35,10 +37,11 @@ type ClientOption func(*Client)
 // NewClient creates a new ToneClone API client
 func NewClient(apiKey string, options ...ClientOption) *Client {
 	client := &Client{
-		baseURL:   DefaultBaseURL,
-		apiKey:    apiKey,
-		userAgent: fmt.Sprintf("toneclone-cli/%s", APIVersion),
-		timeout:   DefaultTimeout,
+		baseURL:    DefaultBaseURL,
+		apiKey:     apiKey,
+		devAuthKey: os.Getenv("TONECLONE_DEV_AUTH"),
+		userAgent:  fmt.Sprintf("toneclone-cli/%s", APIVersion),
+		timeout:    DefaultTimeout,
 		httpClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
@@ -119,22 +122,9 @@ func (e ErrorResponse) Error() string {
 
 // makeRequest performs an HTTP request to the API
 func (c *Client) makeRequest(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
-	// Separate path from query string before joining, since url.JoinPath
-	// percent-encodes '?' when it appears in path segments
-	pathPart := path
-	queryPart := ""
-	if idx := strings.Index(path, "?"); idx != -1 {
-		pathPart = path[:idx]
-		queryPart = path[idx+1:]
-	}
-
-	// Construct URL
-	u, err := url.JoinPath(c.baseURL, pathPart)
+	u, err := c.requestURL(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct URL: %w", err)
-	}
-	if queryPart != "" {
-		u = u + "?" + queryPart
 	}
 
 	// Prepare request body
@@ -153,12 +143,7 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body inte
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("TC-API-Version", APIVersion)
+	c.applyCommonHeaders(req, "application/json")
 
 	// Perform request
 	resp, err := c.httpClient.Do(req)
@@ -169,6 +154,33 @@ func (c *Client) makeRequest(ctx context.Context, method, path string, body inte
 	return resp, nil
 }
 
+func (c *Client) requestURL(path string) (string, error) {
+	// url.JoinPath treats '?' as path data, so split query strings supplied by
+	// resource clients before joining the URL path.
+	pathOnly, rawQuery, _ := strings.Cut(path, "?")
+	u, err := url.JoinPath(c.baseURL, pathOnly)
+	if err != nil {
+		return "", err
+	}
+	if rawQuery != "" {
+		u += "?" + rawQuery
+	}
+	return u, nil
+}
+
+func (c *Client) applyCommonHeaders(req *http.Request, contentType string) {
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.devAuthKey != "" {
+		req.Header.Set("X-Dev-Auth", c.devAuthKey)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("TC-API-Version", APIVersion)
+}
+
 // doRequest performs a request and handles the response
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}, result interface{}) error {
 	resp, err := c.makeRequest(ctx, method, path, body)
@@ -176,7 +188,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		return err
 	}
 	defer resp.Body.Close()
+	return handleResponse(resp, result)
+}
 
+func handleResponse(resp *http.Response, result interface{}) error {
 	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -190,35 +205,35 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 			// If we can't parse the error response, return a generic error
 			return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
 		}
-		
+
 		// Handle rate limiting specifically
 		if resp.StatusCode == http.StatusTooManyRequests {
 			rateLimitErr := &RateLimitError{
 				ErrorResponse: errorResp,
 			}
-			
+
 			// Parse rate limiting headers
 			if remaining := resp.Header.Get("X-RateLimit-Remaining"); remaining != "" {
 				if val, err := strconv.Atoi(remaining); err == nil {
 					rateLimitErr.RemainingRequests = val
 				}
 			}
-			
+
 			if reset := resp.Header.Get("X-RateLimit-Reset"); reset != "" {
 				if timestamp, err := strconv.ParseInt(reset, 10, 64); err == nil {
 					rateLimitErr.ResetTime = time.Unix(timestamp, 0)
 				}
 			}
-			
+
 			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
 				if val, err := strconv.Atoi(retryAfter); err == nil {
 					rateLimitErr.RetryAfterSeconds = val
 				}
 			}
-			
+
 			return rateLimitErr
 		}
-		
+
 		return errorResp
 	}
 
@@ -245,6 +260,45 @@ func (c *Client) Get(ctx context.Context, path string, result interface{}) error
 // Post performs a POST request
 func (c *Client) Post(ctx context.Context, path string, body interface{}, result interface{}) error {
 	return c.doRequestWithRetry(ctx, "POST", path, body, result)
+}
+
+// PostMultipart performs a POST request with a caller-provided multipart body.
+func (c *Client) PostMultipart(ctx context.Context, path, contentType string, body []byte, result interface{}) error {
+	return c.doRawRequestWithRetry(ctx, http.MethodPost, path, contentType, body, result)
+}
+
+func (c *Client) makeRawRequest(ctx context.Context, method, path, contentType string, body []byte) (*http.Response, error) {
+	u, err := c.requestURL(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct URL: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	c.applyCommonHeaders(req, contentType)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	return resp, nil
+}
+
+func (c *Client) doRawRequest(ctx context.Context, method, path, contentType string, body []byte, result interface{}) error {
+	resp, err := c.makeRawRequest(ctx, method, path, contentType, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return handleResponse(resp, result)
+}
+
+func (c *Client) doRawRequestWithRetry(ctx context.Context, method, path, contentType string, body []byte, result interface{}) error {
+	return withRateLimitRetry(ctx, func() error {
+		return c.doRawRequest(ctx, method, path, contentType, body, result)
+	})
 }
 
 // Put performs a PUT request
@@ -299,49 +353,39 @@ func (c *Client) SetTimeout(timeout time.Duration) {
 	c.httpClient.Timeout = timeout
 }
 
-// WithContext returns a new context with timeout if none is set
+// WithContext returns a non-nil context. Request timeouts are enforced by the
+// underlying HTTP client; callers that need context cancellation should derive
+// and cancel their own context.
 func (c *Client) WithContext(ctx context.Context) context.Context {
 	if ctx == nil {
-		ctx = context.Background()
+		return context.Background()
 	}
-
-	// If context doesn't have a deadline, add one based on client timeout
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		ctx, _ = context.WithTimeout(ctx, c.httpClient.Timeout)
-	}
-
 	return ctx
 }
 
 // doRequestWithRetry performs a request with automatic retry for rate limits
 func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string, body interface{}, result interface{}) error {
+	return withRateLimitRetry(ctx, func() error {
+		return c.doRequest(ctx, method, endpoint, body, result)
+	})
+}
+
+func withRateLimitRetry(ctx context.Context, do func() error) error {
 	maxRetries := 3
 	baseDelay := time.Second
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		err := c.doRequest(ctx, method, endpoint, body, result)
-		
+		err := do()
+
 		// Check if it's a rate limit error
 		if rateLimitErr, ok := err.(*RateLimitError); ok {
 			// Don't retry on the last attempt
 			if attempt == maxRetries-1 {
 				return rateLimitErr
 			}
-			
-			// Calculate delay - prefer Retry-After header, fallback to exponential backoff
-			var delay time.Duration
-			if rateLimitErr.RetryAfterSeconds > 0 {
-				delay = time.Duration(rateLimitErr.RetryAfterSeconds) * time.Second
-			} else {
-				// Exponential backoff: 1s, 2s, 4s...
-				delay = baseDelay * time.Duration(1<<attempt)
-			}
-			
-			// Don't wait longer than 60 seconds
-			if delay > 60*time.Second {
-				delay = 60 * time.Second
-			}
-			
+
+			delay := retryDelay(rateLimitErr, attempt, baseDelay)
+
 			// Wait before retrying
 			select {
 			case <-ctx.Done():
@@ -350,10 +394,21 @@ func (c *Client) doRequestWithRetry(ctx context.Context, method, endpoint string
 				continue // Retry
 			}
 		}
-		
+
 		// If it's not a rate limit error, return immediately
 		return err
 	}
-	
+
 	return fmt.Errorf("max retries exceeded")
+}
+
+func retryDelay(rateLimitErr *RateLimitError, attempt int, baseDelay time.Duration) time.Duration {
+	delay := baseDelay * time.Duration(1<<attempt)
+	if rateLimitErr != nil && rateLimitErr.RetryAfterSeconds > 0 {
+		delay = time.Duration(rateLimitErr.RetryAfterSeconds) * time.Second
+	}
+	if delay > 60*time.Second {
+		return 60 * time.Second
+	}
+	return delay
 }
