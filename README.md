@@ -182,7 +182,7 @@ toneclone training add --text="Sample content" --filename="sample.txt" --persona
 # Upload file
 toneclone training add --file="document.pdf" --persona="Professional"
 
-# Bulk upload directory
+# Upload a directory, preserving each file as a separate writing sample
 toneclone training add --directory="./docs" --recursive --persona="Technical"
 
 # Associate file with persona
@@ -345,6 +345,7 @@ toneclone knowledge create \
 ```bash
 # Upload training materials
 toneclone training add --file="brand-guidelines.pdf" --persona="Marketing"
+# Directory uploads preserve each file as a separate writing sample.
 toneclone training add --directory="./docs" --recursive --persona="Technical"
 
 # Manage file associations
