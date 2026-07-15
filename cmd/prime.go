@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -140,10 +141,10 @@ Examples:
 			if err != nil {
 				return err
 			}
-			cmd.Println(out)
+			fmt.Fprintln(os.Stdout, out)
 			return nil
 		}
-		cmd.Print(primeText(g))
+		fmt.Fprint(os.Stdout, primeText(g))
 		return nil
 	},
 }
