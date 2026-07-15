@@ -68,7 +68,6 @@ func TestTrainingAddDirectoryUsesSupportedUploadFlow(t *testing.T) {
 
 	cmd := exec.Command("go", "run", "..", "training", "add", "--directory="+dir, "--persona=persona-1")
 	cmd.Env = append(os.Environ(),
-		"HOME="+t.TempDir(),
 		"TONECLONE_API_KEY=test_key",
 		"TONECLONE_BASE_URL="+server.URL,
 	)
