@@ -140,10 +140,10 @@ Examples:
 			if err != nil {
 				return err
 			}
-			cmd.Println(out)
+			fmt.Fprintln(cmd.OutOrStdout(), out)
 			return nil
 		}
-		cmd.Print(primeText(g))
+		fmt.Fprint(cmd.OutOrStdout(), primeText(g))
 		return nil
 	},
 }

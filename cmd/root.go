@@ -96,6 +96,12 @@ func writeOutputAliasRequestsJSON(args []string) bool {
 func init() {
 	cobra.OnInitialize(initConfig)
 
+	// Cobra defaults successful command output to stderr unless an output writer
+	// is configured. Keep successful, pipeable output on stdout while errors and
+	// diagnostics continue to use stderr.
+	rootCmd.SetOut(os.Stdout)
+	rootCmd.SetErr(os.Stderr)
+
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.toneclone.yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
