@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +69,8 @@ var addTrainingCmd = &cobra.Command{
 	Long: `Add training data by uploading files or text content.
 
 Files can be uploaded from local filesystem or text can be provided directly.
-Files are automatically associated with the specified persona.
+Directory uploads preserve each file as a separate writing sample, then associate
+all successful uploads with the specified persona in one operation.
 
 Examples:
   toneclone training add --file=document.txt --persona=professional
@@ -428,7 +428,6 @@ func runDisassociateTraining(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-
 // Helper functions
 
 func addTextTraining(ctx context.Context, apiClient *client.ToneCloneClient, persona *client.Persona) error {
@@ -558,97 +557,59 @@ func addDirectoryTraining(ctx context.Context, apiClient *client.ToneCloneClient
 	}
 
 	fmt.Printf("Found %d files to upload\n", len(files))
+	return uploadDirectoryFiles(ctx, apiClient, persona, files, trainingVerbose)
+}
 
-	// Process files in batches for better efficiency
-	const batchSize = 10
-	var totalUploaded int
-	var totalAssociated int
-
-	for i := 0; i < len(files); i += batchSize {
-		end := i + batchSize
-		if end > len(files) {
-			end = len(files)
+func uploadDirectoryFiles(ctx context.Context, apiClient *client.ToneCloneClient, persona *client.Persona, files []string, verbose bool) error {
+	fileIDs := make([]string, 0, len(files))
+	failures := make([]string, 0)
+	for i, filePath := range files {
+		filename := filepath.Base(filePath)
+		if verbose {
+			fmt.Printf("Uploading file %d/%d: %s\n", i+1, len(files), filename)
 		}
 
-		batch := files[i:end]
-		batchNum := (i / batchSize) + 1
-		totalBatches := (len(files) + batchSize - 1) / batchSize
-
-		if trainingVerbose {
-			fmt.Printf("Processing batch %d/%d (%d files)\n", batchNum, totalBatches, len(batch))
-		}
-
-		// Prepare file uploads for this batch
-		var fileUploads []client.FileUpload
-
-		for _, filePath := range batch {
-			filename := filepath.Base(filePath)
-			
-			// Open file
-			file, err := os.Open(filePath)
-			if err != nil {
-				fmt.Printf("  ✗ Failed to open %s: %v\n", filename, err)
-				continue
-			}
-
-			fileUploads = append(fileUploads, client.FileUpload{
-				Filename: filename,
-				Reader:   file,
-			})
-		}
-
-		// Skip if no valid files in this batch
-		if len(fileUploads) == 0 {
-			continue
-		}
-
-		// Get persona ID for batch upload
-		var personaID string
-		if persona != nil {
-			personaID = persona.PersonaID
-		}
-
-		// Upload batch with integrated persona association
-		response, err := apiClient.Training.UploadFileBatch(ctx, fileUploads, personaID, "cli")
-		
-		// Close all files
-		for _, upload := range fileUploads {
-			if closer, ok := upload.Reader.(io.Closer); ok {
-				closer.Close()
-			}
-		}
-
+		file, err := os.Open(filePath)
 		if err != nil {
-			fmt.Printf("  ✗ Batch upload failed: %v\n", err)
+			fmt.Printf("  ✗ %s failed: %v\n", filename, err)
+			failures = append(failures, filePath)
 			continue
 		}
-
-		// Report results for this batch
-		for _, result := range response.Files {
-			if result.Status == "success" {
-				fmt.Printf("  ✓ %s uploaded", result.Filename)
-				if result.FileID != "" {
-					fmt.Printf(" (ID: %s)", result.FileID)
-				}
-				if result.Associated {
-					fmt.Printf(" and associated with persona")
-				}
-				fmt.Printf("\n")
-			} else {
-				fmt.Printf("  ✗ %s failed: %s\n", result.Filename, result.Error)
-			}
+		uploaded, uploadErr := apiClient.Training.UploadFile(ctx, file, filename)
+		closeErr := file.Close()
+		if uploadErr != nil {
+			fmt.Printf("  ✗ %s failed: %v\n", filename, uploadErr)
+			failures = append(failures, filePath)
+			continue
+		}
+		if closeErr != nil {
+			fmt.Printf("  ! %s uploaded but the local file did not close cleanly: %v\n", filename, closeErr)
 		}
 
-		totalUploaded += response.Summary.Uploaded
-		totalAssociated += response.Summary.Associated
+		fileIDs = append(fileIDs, uploaded.FileID)
+		fmt.Printf("  ✓ %s uploaded (ID: %s)\n", filename, uploaded.FileID)
 	}
 
-	fmt.Printf("✓ %d files uploaded successfully", totalUploaded)
-	if persona != nil && totalAssociated > 0 {
-		fmt.Printf(", %d associated with persona '%s'", totalAssociated, persona.Name)
+	if persona != nil && len(fileIDs) > 0 {
+		if err := apiClient.Personas.AssociateFiles(ctx, persona.PersonaID, fileIDs); err != nil {
+			recoveryCommand := fmt.Sprintf(
+				"toneclone training associate --file-id=%q --persona=%q",
+				strings.Join(fileIDs, ","),
+				persona.PersonaID,
+			)
+			return fmt.Errorf(
+				"uploaded %d files, but association with persona %q failed; files remain uploaded but may be unassociated; retry association without re-uploading them:\n%s\noriginal error: %w",
+				len(fileIDs), persona.Name, recoveryCommand, err,
+			)
+		}
+		fmt.Printf("✓ %d files uploaded and associated with persona '%s'\n", len(fileIDs), persona.Name)
+	} else {
+		fmt.Printf("✓ %d files uploaded successfully\n", len(fileIDs))
 	}
-	fmt.Printf("\n")
 
+	if len(failures) > 0 {
+		return fmt.Errorf("%d of %d files failed to upload: %s", len(failures), len(files), strings.Join(failures, ", "))
+	}
 	return nil
 }
 
