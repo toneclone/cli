@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.24.7
 
 require (
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
@@ -13,7 +14,6 @@ require (
 )
 
 require (
-	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/google/go-github/v30 v30.1.0 // indirect

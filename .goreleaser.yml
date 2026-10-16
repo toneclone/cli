@@ -115,7 +115,7 @@ release:
 brews:
   - name: toneclone
     homepage: https://github.com/toneclone/cli
-    description: "AI-powered writing assistance from the command line"
+    description: "AI-powered writing assistance from the command-line"
     license: MIT
     repository:
       owner: toneclone
@@ -124,7 +124,7 @@ brews:
       token: "{{ .Env.HOMEBREW_TOKEN }}"
     directory: Formula
     test: |
-      system "#{bin}/toneclone --version"
+      system bin/"toneclone", "--version"
     install: |
       bin.install "toneclone"
 
