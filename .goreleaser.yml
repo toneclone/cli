@@ -124,7 +124,7 @@ brews:
       token: "{{ .Env.HOMEBREW_TOKEN }}"
     directory: Formula
     test: |
-      system "#{bin}/toneclone", "--version"
+      system bin/"toneclone", "--version"
     install: |
       bin.install "toneclone"
 
