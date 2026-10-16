@@ -6,37 +6,41 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  # Gate: the full CI suite (build, vet, test, snapshot + brew audit) must pass
+  # on the tagged commit before anything is published.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read # needed by the (PR-only) lint job's declaration
+
   goreleaser:
+    needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Need full history for changelog generation
           fetch-depth: 0
 
       - name: Set up Go
         id: go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: stable
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Run tests
-        run: go test ./...
+          go-version-file: go.mod
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: "~> v2"
@@ -45,3 +49,27 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}
           GOVERSION: ${{ steps.go.outputs.go-version }}
+
+  # Loud post-publish check: audit the formula actually pushed to the tap
+  # (including online URL/checksum checks the snapshot audit cannot do).
+  # A failure here turns the release run red so a broken tap is noticed.
+  homebrew-published-audit:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Homebrew/actions/setup-homebrew@main
+      - name: brew audit --strict --online (published formula)
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_FROM_API: "1"
+        run: |
+          brew tap toneclone/toneclone
+          brew audit --strict --online --formula toneclone/toneclone/toneclone
+      - name: Install and test published formula
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_FROM_API: "1"
+        run: |
+          brew install toneclone/toneclone/toneclone
+          brew test toneclone/toneclone/toneclone
+          toneclone --version

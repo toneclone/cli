@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Called by release.yml so a tag can only publish if CI passes on that commit.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  lint:
+    # The existing codebase has ~64 pre-existing golangci-lint findings, so
+    # only report issues introduced by the PR diff.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14
+          only-new-issues: true
+
+  homebrew-audit:
+    # Build a GoReleaser snapshot (no publishing) and audit the generated
+    # Homebrew formula, so formula problems block a release before it ships.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        id: go
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean --skip=publish
+        env:
+          # Referenced by .goreleaser.yml; unused because publishing is skipped.
+          HOMEBREW_TOKEN: unused
+          GOVERSION: ${{ steps.go.outputs.go-version }}
+      - uses: Homebrew/actions/setup-homebrew@main
+      - name: brew audit --strict (snapshot formula)
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_FROM_API: "1"
+        run: |
+          formula=dist/homebrew/Formula/toneclone.rb
+          test -f "$formula" || { echo "::error::GoReleaser did not generate $formula"; exit 1; }
+          brew tap-new --no-git toneclone/ci-audit
+          cp "$formula" "$(brew --repository toneclone/ci-audit)/Formula/"
+          brew audit --strict --formula toneclone/ci-audit/toneclone
