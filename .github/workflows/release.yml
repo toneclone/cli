@@ -61,14 +61,12 @@ jobs:
       - name: brew audit --strict --online (published formula)
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
-          HOMEBREW_NO_INSTALL_FROM_API: "1"
         run: |
           brew tap toneclone/toneclone
           brew audit --strict --online --formula toneclone/toneclone/toneclone
       - name: Install and test published formula
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
-          HOMEBREW_NO_INSTALL_FROM_API: "1"
         run: |
           brew install toneclone/toneclone/toneclone
           brew test toneclone/toneclone/toneclone
