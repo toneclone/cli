@@ -39,24 +39,29 @@ func NewConfig() *Config {
 	}
 }
 
-// LoadConfig loads configuration from file and environment variables
-func LoadConfig() (*Config, error) {
-	config := NewConfig()
-
-	// Get config file path
-	configPath := viper.ConfigFileUsed()
-	if configPath == "" {
-		configPath, _ = GetConfigPath()
+// LoadFileConfig loads configuration from the config file only, ignoring
+// environment variable overrides. Use it for commands that modify and save the
+// config, so per-process overrides (e.g. TONECLONE_API_KEY) are never persisted.
+func LoadFileConfig() (*Config, error) {
+	config, err := readConfigFile()
+	if err != nil {
+		return nil, err
 	}
 
-	// Try to read config file directly
-	if _, err := os.Stat(configPath); err == nil {
-		data, err := os.ReadFile(configPath)
-		if err == nil {
-			if err := yaml.Unmarshal(data, config); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-			}
-		}
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	return config, nil
+}
+
+// LoadConfig loads configuration from file and environment variables.
+// The result may contain a synthetic "environment" profile and must not be
+// saved back to disk; use LoadFileConfig for load-modify-save flows.
+func LoadConfig() (*Config, error) {
+	config, err := readConfigFile()
+	if err != nil {
+		return nil, err
 	}
 
 	// Override with environment variables if present
@@ -81,6 +86,30 @@ func LoadConfig() (*Config, error) {
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	return config, nil
+}
+
+// readConfigFile reads the config file (if any) over the defaults, without
+// applying environment overrides or validating.
+func readConfigFile() (*Config, error) {
+	config := NewConfig()
+
+	// Get config file path
+	configPath := viper.ConfigFileUsed()
+	if configPath == "" {
+		configPath, _ = GetConfigPath()
+	}
+
+	// Try to read config file directly
+	if _, err := os.Stat(configPath); err == nil {
+		data, err := os.ReadFile(configPath)
+		if err == nil {
+			if err := yaml.Unmarshal(data, config); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+			}
+		}
 	}
 
 	return config, nil
