@@ -69,7 +69,7 @@ func runWriteCapture(t *testing.T, knowledge string, drafts int, globalJSON bool
 	os.Stdout = w
 	writeCmd.SetContext(context.Background())
 	runErr := runWrite(writeCmd, nil)
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	out, _ := io.ReadAll(r)
 	if runErr != nil {
