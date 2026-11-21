@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -414,8 +416,8 @@ func runInteractivePersonaCreation() error {
 
 	// Get persona name
 	fmt.Print("Enter persona name: ")
-	var name string
-	fmt.Scanln(&name)
+	// Read the whole line: fmt.Scanln into a string only captures one word.
+	name := strings.TrimSpace(lineReader(os.Stdin)())
 	if name == "" {
 		return fmt.Errorf("persona name is required")
 	}
@@ -617,6 +619,27 @@ func outputPersonaUpdated(persona *client.Persona) error {
 	fmt.Printf("  Type: %s\n", persona.PersonaType)
 	fmt.Printf("  Status: %s\n", persona.Status)
 	return nil
+}
+
+// truncateRunes shortens s to at most max characters, replacing the tail with
+// "..." when it is cut. It counts runes rather than bytes so multi-byte
+// characters are never split.
+func truncateRunes(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max-3]) + "..."
+}
+
+// lineReader returns a function that reads one full line (without the
+// trailing newline) from r per call. Returns "" at EOF.
+func lineReader(r io.Reader) func() string {
+	reader := bufio.NewReader(r)
+	return func() string {
+		line, _ := reader.ReadString('\n')
+		return strings.TrimRight(line, "\r\n")
+	}
 }
 
 func formatTime(t time.Time) string {

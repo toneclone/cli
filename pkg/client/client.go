@@ -201,13 +201,19 @@ func handleResponse(resp *http.Response, result interface{}) error {
 	// Handle error responses
 	if resp.StatusCode >= 400 {
 		var errorResp ErrorResponse
-		if err := json.Unmarshal(respBody, &errorResp); err != nil {
+		parseErr := json.Unmarshal(respBody, &errorResp)
+		if parseErr != nil && resp.StatusCode != http.StatusTooManyRequests {
 			// If we can't parse the error response, return a generic error
 			return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
 		}
 
 		// Handle rate limiting specifically
 		if resp.StatusCode == http.StatusTooManyRequests {
+			// Proxies in front of the API may answer 429 with a non-JSON body;
+			// it must still be treated as a rate limit (and retried).
+			if parseErr != nil {
+				errorResp = ErrorResponse{ErrorMsg: strings.TrimSpace(string(respBody))}
+			}
 			rateLimitErr := &RateLimitError{
 				ErrorResponse: errorResp,
 			}

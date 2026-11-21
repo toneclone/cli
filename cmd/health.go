@@ -19,6 +19,7 @@ var (
 	healthFormat  string
 	healthVerbose bool
 	healthTimeout int
+	pingTimeout   int
 )
 
 // healthCmd represents the health command
@@ -96,7 +97,7 @@ func init() {
 	healthCmd.Flags().IntVar(&healthTimeout, "timeout", 10, "timeout in seconds")
 
 	// Ping command flags
-	pingCmd.Flags().IntVar(&healthTimeout, "timeout", 5, "timeout in seconds")
+	pingCmd.Flags().IntVar(&pingTimeout, "timeout", 5, "timeout in seconds")
 
 	// Status command flags
 	healthStatusCmd.Flags().StringVar(&healthFormat, "format", "table", "output format: table, json")
@@ -133,12 +134,12 @@ func performPingCheck() error {
 	apiClient := client.NewToneCloneClientFromConfig(
 		keyConfig.BaseURL,
 		keyConfig.Key,
-		time.Duration(healthTimeout)*time.Second,
+		time.Duration(pingTimeout)*time.Second,
 	)
 
 	// Ping API
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(healthTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(pingTimeout)*time.Second)
 	defer cancel()
 
 	err = apiClient.Ping(ctx)
@@ -290,10 +291,7 @@ func outputHealthTable(result *HealthResult) error {
 	for _, check := range result.Checks {
 		errorMsg := ""
 		if check.Error != "" {
-			errorMsg = check.Error
-			if len(errorMsg) > 50 {
-				errorMsg = errorMsg[:47] + "..."
-			}
+			errorMsg = truncateRunes(check.Error, 50)
 		}
 
 		fmt.Fprintf(w, "%s\t%s\t%v\t%s\n",

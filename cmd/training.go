@@ -518,10 +518,32 @@ func addDirectoryTraining(ctx context.Context, apiClient *client.ToneCloneClient
 		return fmt.Errorf("directory does not exist: %s", trainingDirectory)
 	}
 
+	files, err := collectDirectoryTrainingFiles(trainingDirectory, trainingRecursive)
+	if err != nil {
+		return fmt.Errorf("failed to walk directory: %w", err)
+	}
+
+	if len(files) == 0 {
+		return fmt.Errorf("no supported files found in directory")
+	}
+
+	fmt.Printf("Found %d files to upload\n", len(files))
+	return uploadDirectoryFiles(ctx, apiClient, persona, files, trainingVerbose)
+}
+
+// collectDirectoryTrainingFiles walks root and returns the supported training
+// file paths found there, restricted to files directly inside root unless
+// recursive is true.
+func collectDirectoryTrainingFiles(root string, recursive bool) ([]string, error) {
 	var files []string
 
-	// Walk directory
-	err := filepath.Walk(trainingDirectory, func(path string, info os.FileInfo, err error) error {
+	// filepath.Walk reports paths built via filepath.Join, which cleans away
+	// "./" prefixes and trailing slashes. root must be cleaned the same way,
+	// or the non-recursive dir comparison below never matches a root passed
+	// as e.g. "./docs" or "docs/".
+	cleanRoot := filepath.Clean(root)
+
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -532,9 +554,9 @@ func addDirectoryTraining(ctx context.Context, apiClient *client.ToneCloneClient
 		}
 
 		// Skip subdirectories if not recursive
-		if !trainingRecursive {
+		if !recursive {
 			dir := filepath.Dir(path)
-			if dir != trainingDirectory {
+			if dir != cleanRoot {
 				return nil
 			}
 		}
@@ -548,16 +570,7 @@ func addDirectoryTraining(ctx context.Context, apiClient *client.ToneCloneClient
 		return nil
 	})
 
-	if err != nil {
-		return fmt.Errorf("failed to walk directory: %w", err)
-	}
-
-	if len(files) == 0 {
-		return fmt.Errorf("no supported files found in directory")
-	}
-
-	fmt.Printf("Found %d files to upload\n", len(files))
-	return uploadDirectoryFiles(ctx, apiClient, persona, files, trainingVerbose)
+	return files, err
 }
 
 func uploadDirectoryFiles(ctx context.Context, apiClient *client.ToneCloneClient, persona *client.Persona, files []string, verbose bool) error {

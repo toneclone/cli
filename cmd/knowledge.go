@@ -695,10 +695,12 @@ func runInteractiveKnowledgeCardCreation() error {
 	fmt.Println("Interactive Knowledge Card Creation")
 	fmt.Println("============================")
 
+	// Read whole lines: fmt.Scanln into a string only captures one word.
+	readLine := lineReader(os.Stdin)
+
 	// Get knowledge card name
 	fmt.Print("Enter knowledge card name: ")
-	var name string
-	fmt.Scanln(&name)
+	name := strings.TrimSpace(readLine())
 	if name == "" {
 		return fmt.Errorf("knowledge card name is required")
 	}
@@ -707,9 +709,8 @@ func runInteractiveKnowledgeCardCreation() error {
 	fmt.Println("\nEnter knowledge card instructions (press Enter twice when done):")
 	var instructions []string
 	for {
-		var line string
-		fmt.Scanln(&line)
-		if line == "" {
+		line := readLine()
+		if strings.TrimSpace(line) == "" {
 			break
 		}
 		instructions = append(instructions, line)
@@ -814,10 +815,7 @@ func outputKnowledgeTable(knowledge []client.KnowledgeCard) error {
 		updated := formatTime(knowledgeCard.UpdatedAt)
 
 		// Truncate instructions if too long
-		instructions := knowledgeCard.Instructions
-		if len(instructions) > 50 {
-			instructions = instructions[:47] + "..."
-		}
+		instructions := truncateRunes(knowledgeCard.Instructions, 50)
 
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 			terminalSafe(knowledgeCard.Name),
