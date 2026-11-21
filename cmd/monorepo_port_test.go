@@ -63,7 +63,9 @@ func captureStdout(t *testing.T, fn func()) string {
 	defer func() { os.Stdout = orig }()
 
 	fn()
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	out, err := io.ReadAll(r)
 	if err != nil {
@@ -128,12 +130,14 @@ func withStdin(t *testing.T, input string) {
 	if _, err := w.WriteString(input); err != nil {
 		t.Fatal(err)
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
 	orig := os.Stdin
 	os.Stdin = r
 	t.Cleanup(func() {
 		os.Stdin = orig
-		r.Close()
+		_ = r.Close()
 	})
 }
 
