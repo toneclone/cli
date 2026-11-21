@@ -160,8 +160,8 @@ func init() {
 func runLogin(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Load existing config
-	cfg, err := config.LoadConfig()
+	// Load existing config (file only, so env overrides are not persisted)
+	cfg, err := config.LoadFileConfig()
 	if err != nil {
 		cfg = config.NewConfig()
 	}
@@ -270,7 +270,8 @@ func runLogin(cmd *cobra.Command, args []string) error {
 }
 
 func runLogout(cmd *cobra.Command, args []string) error {
-	cfg, err := config.LoadConfig()
+	// File only, so env overrides are not persisted
+	cfg, err := config.LoadFileConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -397,7 +398,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 func runSwitch(cmd *cobra.Command, args []string) error {
 	profileName, _ := cmd.Flags().GetString("profile")
 
-	cfg, err := config.LoadConfig()
+	// File only, so env overrides are not persisted
+	cfg, err := config.LoadFileConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

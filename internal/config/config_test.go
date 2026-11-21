@@ -352,6 +352,68 @@ func TestEnvironmentBaseURLDoesNotRedirectStoredKey(t *testing.T) {
 	}
 }
 
+func TestLoadFileConfigIgnoresEnvironmentOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("TONECLONE_API_KEY", "tc_test_env_override_key")
+	t.Setenv("TONECLONE_BASE_URL", "")
+
+	oldConfigFile := viper.ConfigFileUsed()
+	viper.SetConfigFile(filepath.Join(tmpDir, ".toneclone.yaml"))
+	t.Cleanup(func() {
+		viper.SetConfigFile(oldConfigFile)
+	})
+
+	envCfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if _, ok := envCfg.Keys["environment"]; !ok {
+		t.Fatal("expected LoadConfig to apply the environment override")
+	}
+
+	fileCfg, err := LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig failed: %v", err)
+	}
+	if len(fileCfg.Keys) != 0 || fileCfg.DefaultKey != "" {
+		t.Errorf("expected LoadFileConfig to ignore TONECLONE_API_KEY, got keys=%v default=%q", fileCfg.Keys, fileCfg.DefaultKey)
+	}
+}
+
+func TestLoadFileConfigReadsStoredProfilesOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".toneclone.yaml")
+
+	cfg := NewConfig()
+	cfg.AddKey("main", "tc_live_storeddefault", "https://api.toneclone.ai")
+	if err := cfg.SaveConfig(configPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	t.Setenv("TONECLONE_API_KEY", "tc_test_env_override_key")
+
+	oldConfigFile := viper.ConfigFileUsed()
+	viper.SetConfigFile(configPath)
+	t.Cleanup(func() {
+		viper.SetConfigFile(oldConfigFile)
+	})
+
+	fileCfg, err := LoadFileConfig()
+	if err != nil {
+		t.Fatalf("LoadFileConfig failed: %v", err)
+	}
+	if _, ok := fileCfg.Keys["environment"]; ok {
+		t.Error("LoadFileConfig must not include the synthetic 'environment' profile")
+	}
+	if _, ok := fileCfg.Keys["main"]; !ok || len(fileCfg.Keys) != 1 {
+		t.Errorf("expected only stored 'main' profile, got %v", fileCfg.ListKeys())
+	}
+	if fileCfg.DefaultKey != "main" {
+		t.Errorf("expected default 'main', got %q", fileCfg.DefaultKey)
+	}
+}
+
 func TestGetConfigPath(t *testing.T) {
 	path, err := GetConfigPath()
 	if err != nil {
