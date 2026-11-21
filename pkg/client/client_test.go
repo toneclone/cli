@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -276,4 +277,57 @@ func TestValidateAPIKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for invalid key")
 	}
+}
+
+// Ported from toneclone/toneclone 442fcba8a (#760). Gateways in front of the
+// API (CloudFront, App Runner) can answer 429 with a plain-text body. That must
+// still be treated as a rate limit: retried and reported as *RateLimitError,
+// not as a generic parse failure.
+func TestClientRateLimitWithNonJSONBody(t *testing.T) {
+	t.Run("retries and succeeds", func(t *testing.T) {
+		calls := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls++
+			if calls == 1 {
+				w.Header().Set("Retry-After", "1")
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = w.Write([]byte("Too Many Requests"))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		}))
+		defer server.Close()
+
+		client := NewClient("test_key", WithBaseURL(server.URL))
+		var result map[string]bool
+		if err := client.Get(context.Background(), "/thing", &result); err != nil {
+			t.Fatalf("expected retry to succeed, got error: %v", err)
+		}
+		if calls != 2 {
+			t.Errorf("expected 2 calls, got %d", calls)
+		}
+		if !result["ok"] {
+			t.Errorf("unexpected result: %v", result)
+		}
+	})
+
+	t.Run("returns RateLimitError with retry info", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Retry-After", "7")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte("<html>Too Many Requests</html>"))
+		}))
+		defer server.Close()
+
+		client := NewClient("test_key", WithBaseURL(server.URL))
+		err := client.doRequest(context.Background(), "GET", "/thing", nil, nil)
+		var rateLimitErr *RateLimitError
+		if !errors.As(err, &rateLimitErr) {
+			t.Fatalf("expected *RateLimitError, got %T: %v", err, err)
+		}
+		if rateLimitErr.RetryAfterSeconds != 7 {
+			t.Errorf("expected RetryAfterSeconds 7, got %d", rateLimitErr.RetryAfterSeconds)
+		}
+	})
 }

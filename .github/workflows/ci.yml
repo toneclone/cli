@@ -69,5 +69,7 @@ jobs:
           formula=dist/homebrew/Formula/toneclone.rb
           test -f "$formula" || { echo "::error::GoReleaser did not generate $formula"; exit 1; }
           brew tap-new --no-git toneclone/ci-audit
+          # Homebrew now refuses to load formulae from untrusted third-party taps.
+          brew trust toneclone/ci-audit
           cp "$formula" "$(brew --repository toneclone/ci-audit)/Formula/"
           brew audit --strict --formula toneclone/ci-audit/toneclone
