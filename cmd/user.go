@@ -191,6 +191,24 @@ func runUserSettings(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get user info: %w", err)
 	}
 
+	configPath := viper.ConfigFileUsed()
+	if configPath == "" {
+		configPath, _ = config.GetConfigPath()
+	}
+
+	if wantsJSONFormat(userFormat) {
+		// Same fields as the text output: the user plus the active CLI settings.
+		settings := struct {
+			*client.User
+			APIKeyName string `json:"apiKeyName"`
+			BaseURL    string `json:"baseUrl"`
+			ConfigFile string `json:"configFile"`
+		}{user, cfg.GetCurrentKeyName(), keyConfig.BaseURL, configPath}
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(settings)
+	}
+
 	// Display current settings
 	fmt.Printf("User Settings\n")
 	fmt.Printf("=============\n")
@@ -199,10 +217,6 @@ func runUserSettings(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Plan:         %s\n", user.Plan)
 	fmt.Printf("API Key:      %s\n", cfg.GetCurrentKeyName())
 	fmt.Printf("Base URL:     %s\n", keyConfig.BaseURL)
-	configPath := viper.ConfigFileUsed()
-	if configPath == "" {
-		configPath, _ = config.GetConfigPath()
-	}
 	fmt.Printf("Config File:  %s\n", configPath)
 
 	return nil

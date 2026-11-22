@@ -649,6 +649,10 @@ func formatTime(t time.Time) string {
 
 	now := time.Now()
 	diff := now.Sub(t)
+	if diff < 0 {
+		// Server timestamps can be slightly ahead of the local clock.
+		diff = 0
+	}
 
 	if diff < time.Hour {
 		return fmt.Sprintf("%d minutes ago", int(diff.Minutes()))

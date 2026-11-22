@@ -161,9 +161,11 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Load existing config (file only, so env overrides are not persisted)
+	// A missing file yields defaults; any other failure must abort, since
+	// saving a blank config would delete every profile already stored.
 	cfg, err := config.LoadFileConfig()
 	if err != nil {
-		cfg = config.NewConfig()
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Get API key
