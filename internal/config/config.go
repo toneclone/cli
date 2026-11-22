@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -102,14 +104,17 @@ func readConfigFile() (*Config, error) {
 		configPath, _ = GetConfigPath()
 	}
 
-	// Try to read config file directly
-	if _, err := os.Stat(configPath); err == nil {
-		data, err := os.ReadFile(configPath)
-		if err == nil {
-			if err := yaml.Unmarshal(data, config); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-			}
+	// A missing file yields the defaults; any other read failure is an error so
+	// callers that save the config never replace an unreadable file with defaults.
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return config, nil
 		}
+		return nil, fmt.Errorf("failed to read config: %w", err)
+	}
+	if err := yaml.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	return config, nil

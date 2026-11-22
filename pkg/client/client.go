@@ -207,6 +207,16 @@ func handleResponse(resp *http.Response, result interface{}) error {
 			return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
 		}
 
+		// The monthly draft/critique quotas also answer 429, but with an
+		// upgrade_url and no Retry-After. That is a plan limit, not transient
+		// rate limiting: retrying cannot succeed, and the user needs the quota
+		// message and upgrade link rather than "please wait".
+		if resp.StatusCode == http.StatusTooManyRequests && parseErr == nil {
+			if planErr, ok := planLimitError(resp, respBody, errorResp); ok {
+				return planErr
+			}
+		}
+
 		// Handle rate limiting specifically
 		if resp.StatusCode == http.StatusTooManyRequests {
 			// Proxies in front of the API may answer 429 with a non-JSON body;
@@ -256,6 +266,30 @@ func handleResponse(resp *http.Response, result interface{}) error {
 	}
 
 	return nil
+}
+
+// planLimitError reports whether a 429 is a plan quota (upgrade_url, no
+// positive Retry-After) and, if so, returns it as a non-retryable plan_limit
+// ErrorResponse that keeps the upgrade link.
+func planLimitError(resp *http.Response, body []byte, errorResp ErrorResponse) (ErrorResponse, bool) {
+	if retryAfter, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && retryAfter > 0 {
+		return ErrorResponse{}, false
+	}
+	var quota struct {
+		UpgradeURL string `json:"upgrade_url"`
+	}
+	if err := json.Unmarshal(body, &quota); err != nil || quota.UpgradeURL == "" {
+		return ErrorResponse{}, false
+	}
+	if errorResp.Code == "" {
+		errorResp.Code = "plan_limit"
+	}
+	if errorResp.Message == "" {
+		errorResp.Message = "upgrade at " + quota.UpgradeURL
+	} else {
+		errorResp.Message += " (upgrade at " + quota.UpgradeURL + ")"
+	}
+	return errorResp, true
 }
 
 // Get performs a GET request
